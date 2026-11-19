@@ -57,7 +57,7 @@ pub fn staleness_note(last_updated: &str, now: SystemTime) -> Option<String> {
 }
 
 /// Days since 1970-01-01 of a `YYYY-MM-DD` date (proleptic Gregorian calendar).
-fn days_from_date(date: &str) -> Option<i64> {
+pub(crate) fn days_from_date(date: &str) -> Option<i64> {
     let mut parts = date.split('-');
     let year: i64 = parts.next()?.parse().ok()?;
     let month: i64 = parts.next()?.parse().ok()?;
@@ -126,6 +126,7 @@ pub enum Verdict {
 /// A parsed availability snapshot.
 #[derive(Debug)]
 pub struct Snapshot {
+    source: Option<String>,
     last_updated: String,
     regions: Vec<String>,
     masks: HashMap<String, u64>,
@@ -134,6 +135,7 @@ pub struct Snapshot {
 impl Snapshot {
     /// Parse the snapshot text. `Err` names the first line that does not follow the format.
     pub fn parse(text: &str) -> Result<Snapshot, String> {
+        let mut source = None;
         let mut last_updated = None;
         let mut regions: Option<Vec<String>> = None;
         let mut masks = HashMap::new();
@@ -142,6 +144,8 @@ impl Snapshot {
             if let Some(header) = line.strip_prefix("# ") {
                 if let Some(value) = header.strip_prefix("last_updated ") {
                     last_updated = Some(value.trim().to_string());
+                } else if let Some(value) = header.strip_prefix("source ") {
+                    source = Some(value.trim().to_string());
                 } else if let Some(value) = header.strip_prefix("regions ") {
                     let list: Vec<String> = value.split_whitespace().map(str::to_string).collect();
                     if list.is_empty() || list.len() > 64 {
@@ -162,6 +166,7 @@ impl Snapshot {
             masks.insert(name.to_string(), mask);
         }
         Ok(Snapshot {
+            source,
             last_updated: last_updated.ok_or("missing `# last_updated` header")?,
             regions: regions.ok_or("missing `# regions` header")?,
             masks,
@@ -172,16 +177,13 @@ impl Snapshot {
     pub fn bundled() -> &'static Snapshot {
         static BUNDLED: OnceLock<Snapshot> = OnceLock::new();
         BUNDLED.get_or_init(|| {
-            let snapshot = Snapshot::parse(BUNDLED_CFN)
-                .expect("the bundled availability snapshot is well formed");
-            if let Some(note) = snapshot.staleness_note(SystemTime::now()) {
-                tracing::warn!(
-                    "the bundled AWS Regional availability data of {}: {note}",
-                    snapshot.data_date()
-                );
-            }
-            snapshot
+            Snapshot::parse(BUNDLED_CFN).expect("the bundled availability snapshot is well formed")
         })
+    }
+
+    /// The `# source` header: the object this snapshot was made from, when it names one.
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
     }
 
     /// The dataset's `last_updated` time, as published (RFC 3339).
@@ -202,6 +204,13 @@ impl Snapshot {
     /// How many types the snapshot lists.
     pub fn type_count(&self) -> usize {
         self.masks.len()
+    }
+
+    /// The types the snapshot lists, sorted.
+    pub fn resource_types(&self) -> Vec<&str> {
+        let mut names: Vec<&str> = self.masks.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        names
     }
 
     /// The Regions the snapshot lists.

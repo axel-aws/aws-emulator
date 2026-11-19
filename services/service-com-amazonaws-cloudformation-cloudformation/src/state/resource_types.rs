@@ -1569,6 +1569,91 @@ mod tests {
         assert!(!message("2999-01-01T00:00:00+00:00").contains("days old"));
     }
 
+    /// The gate reads the data in use, so a cache a user refreshed can change its answers: a type
+    /// only a newer cache lists is refused in the Region it marks missing, and a type nobody lists
+    /// is not. The data in use is chosen once per process, and this is the only unit test of this
+    /// crate that reaches it.
+    #[test]
+    fn the_gate_reads_the_data_in_use() {
+        use service_common::availability_source::{CACHE_DIR_ENV, CACHE_FILE};
+        let dir = std::env::temp_dir().join(format!("gate-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // A real, whole cache file: made by the converter, so it has its count and end marker.
+        // Full size (every bundled type, available everywhere, plus one made-up type), so it
+        // clears the floor, and dated just after the bundled data, so it wins and is never in
+        // the future.
+        let bundled = service_common::region_availability::Snapshot::bundled();
+        let regions: Vec<serde_json::Value> = bundled
+            .regions()
+            .iter()
+            .map(|r| serde_json::json!({ "Region": r }))
+            .collect();
+        let everywhere = |made_up: bool| -> serde_json::Value {
+            bundled
+                .regions()
+                .iter()
+                .map(|r| {
+                    let word = if made_up && r == "ap-southeast-7" {
+                        "Unavailable"
+                    } else {
+                        "Available"
+                    };
+                    (r.clone(), serde_json::Value::from(word))
+                })
+                .collect::<serde_json::Map<_, _>>()
+                .into()
+        };
+        let mut services: std::collections::BTreeMap<&str, Vec<serde_json::Value>> =
+            std::collections::BTreeMap::new();
+        for name in bundled.resource_types() {
+            let mut parts = name.split("::").skip(1);
+            let (service, kind) = (parts.next().unwrap(), parts.next().unwrap());
+            services.entry(service).or_default().push(
+                serde_json::json!({"resourceTypeName": kind, "regionalAvailability": everywhere(false)}),
+            );
+        }
+        services.entry("Made").or_default().push(
+            serde_json::json!({"resourceTypeName": "Thing", "regionalAvailability": everywhere(true)}),
+        );
+        let types: Vec<serde_json::Value> = services
+            .into_iter()
+            .map(|(s, t)| serde_json::json!({"serviceName": s, "resourceTypes": t}))
+            .collect();
+        let stamp = format!("{}.999999999+00:00", &bundled.last_updated()[..19]);
+        let text = service_common::availability_source::convert_cfn(
+            "v1",
+            &stamp,
+            &serde_json::to_vec(&regions).unwrap(),
+            &serde_json::to_vec(&types).unwrap(),
+            std::time::SystemTime::now(),
+        )
+        .unwrap();
+        std::fs::write(dir.join(CACHE_FILE), text).unwrap();
+        std::env::set_var(CACHE_DIR_ENV, &dir);
+        std::env::set_var("EMULATOR_REGION_AVAILABILITY", "enforce");
+        let template = |resource_type: &str| {
+            format!(r#"{{"Resources":{{"R":{{"Type":"{resource_type}"}}}}}}"#)
+        };
+        let gate = |resource_type: &str, region: &str| {
+            crate::state::validate_resource_types_in_region(&template(resource_type), region)
+        };
+        let refused = gate("AWS::Made::Thing", "ap-southeast-7").unwrap_err();
+        assert!(
+            refused.contains("[AWS::Made::Thing]")
+                && refused.contains(&format!("data of {}", bundled.data_date()))
+                && refused.contains("not available in ap-southeast-7;"),
+            "{refused}"
+        );
+        assert_eq!(gate("AWS::Made::Thing", "us-east-1"), Ok(()));
+        assert_eq!(gate("AWS::Made::Other", "ap-southeast-7"), Ok(()));
+        // The cache is the data in use: it offers MemoryDB in Bangkok, which the bundled data
+        // does not.
+        assert_eq!(gate("AWS::MemoryDB::Cluster", "ap-southeast-7"), Ok(()));
+        std::env::remove_var(CACHE_DIR_ENV);
+        std::env::remove_var("EMULATOR_REGION_AVAILABILITY");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     /// What the data does not list is never refused: a Region it omits (a Region newer than
     /// the data, or a partition it leaves out) for every catalogued type, and a type it omits
     /// in every Region it lists.

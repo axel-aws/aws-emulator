@@ -1,0 +1,43 @@
+{
+  "version": "v1",
+  "formats": [
+    "csv",
+    "json",
+    "parquet"
+  ],
+  "entities": {
+    "regions": {
+      "record_count": 37,
+      "files": [
+        "public/v1/csv/regions.csv",
+        "public/v1/json/regions.json",
+        "public/v1/parquet/regions.parquet"
+      ]
+    },
+    "apis": {
+      "record_count": 444755,
+      "files": [
+        "public/v1/csv/apis.csv",
+        "public/v1/json/apis.json",
+        "public/v1/parquet/apis.parquet"
+      ]
+    },
+    "cfn_resources": {
+      "record_count": 141246,
+      "files": [
+        "public/v1/csv/cfn_resources.csv",
+        "public/v1/json/cfn_resources.json",
+        "public/v1/parquet/cfn_resources.parquet"
+      ]
+    },
+    "products": {
+      "record_count": 55981,
+      "files": [
+        "public/v1/csv/products.csv",
+        "public/v1/json/products.json",
+        "public/v1/parquet/products.parquet"
+      ]
+    }
+  },
+  "last_updated": "2026-11-19T00:03:06.922775+00:00"
+}

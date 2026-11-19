@@ -1061,8 +1061,11 @@ pub fn validate_resource_types(template_body: &str) -> Result<(), String> {
 ///
 /// What it does follows [`service_common::region_availability::Mode`]: `enforce` refuses,
 /// `warn` logs what it would have refused and admits the template, `off` does not look.
+/// The data is `service_common::availability_source::current()`: the bundled snapshot, or a
+/// newer cache the user refreshed.
 pub fn validate_resource_types_in_region(template_body: &str, region: &str) -> Result<(), String> {
-    use service_common::region_availability::{Mode, Snapshot};
+    use service_common::availability_source;
+    use service_common::region_availability::Mode;
     let mode = Mode::from_env();
     if mode == Mode::Off {
         return Ok(());
@@ -1073,7 +1076,7 @@ pub fn validate_resource_types_in_region(template_body: &str, region: &str) -> R
             template_body,
             &template,
             region,
-            Snapshot::bundled(),
+            availability_source::current(),
         ),
         None => Ok(()),
     }

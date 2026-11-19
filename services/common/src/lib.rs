@@ -275,6 +275,9 @@ pub mod aws_availability_zones;
 /// Whether AWS publishes a resource, such as a CloudFormation resource type, in a Region,
 /// from a snapshot of AWS's Regional availability data, and what to do when it does not.
 pub mod region_availability;
+/// Fetching AWS's Regional availability data through its S3 access point, caching it on disk, and
+/// choosing between the cache and the bundled snapshot.
+pub mod availability_source;
 /// Whether AWS offers an API service in a Region, from the same snapshot data, keyed by the
 /// service's Smithy shape id, and what to do with a request to one it does not.
 pub mod service_availability;

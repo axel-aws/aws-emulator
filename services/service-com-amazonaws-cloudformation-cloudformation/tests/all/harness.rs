@@ -20,6 +20,19 @@ use smithy_server_runtime::MultiServiceRouter;
 /// The region the tests' requests are signed for.
 pub const REGION: &str = "us-east-1";
 
+/// Points the Regional availability data at an empty cache directory, once, before any request
+/// reaches the gate, so a cache in the developer's home folder cannot change what these suites
+/// see: they run on the data bundled in the crate.
+fn use_no_availability_cache() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let dir =
+            std::env::temp_dir().join(format!("no-availability-cache-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("a temp folder");
+        std::env::set_var("EMULATOR_REGION_AVAILABILITY_CACHE", dir);
+    });
+}
+
 /// A router carrying only this service.
 pub fn router() -> MultiServiceRouter {
     router_with_engine().0
@@ -36,6 +49,7 @@ pub fn router() -> MultiServiceRouter {
 /// Data Firehose is deliberately NOT one of them — `unprovisioned_resources.rs` is the
 /// suite that pins what a stack does when an owning service cannot be reached.)
 pub fn router_with_engine() -> (MultiServiceRouter, Arc<engine::InMemoryEngine>) {
+    use_no_availability_cache();
     let engine: Arc<engine::InMemoryEngine> = Arc::new(engine::InMemoryEngine::new());
     let mut router = MultiServiceRouter::new();
     router.register_service(EmulatedService::new(Arc::clone(&engine)));

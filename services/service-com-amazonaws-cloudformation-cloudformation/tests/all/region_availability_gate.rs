@@ -277,3 +277,93 @@ async fn an_update_or_change_set_declaring_a_missing_type_is_refused() {
     .await;
     assert_eq!(status, 200, "UpdateStack with a type Bangkok has: {body}");
 }
+
+/// The name the child run below gives, so it runs the one row that a home-folder cache would
+/// change.
+const BANGKOK_ROW: &str = "region_availability_gate::a_type_the_region_lacks_is_refused_and_the_same_type_is_admitted_where_it_exists";
+const HOME_PROBE_ENV: &str = "REGION_AVAILABILITY_GATE_HOME_PROBE";
+
+/// The harness never reads a cache from `$HOME`. A valid, sealed cache, newer than the bundled
+/// data and offering every type in Bangkok and Auckland, is put in a temporary home folder. The
+/// control shows the loader would use it. Then the Bangkok row runs in a child process with that
+/// home folder (and the cache variable unset): it still sees the refusals, so the cache was not
+/// read.
+#[test]
+fn the_suites_ignore_a_cache_in_the_home_folder() {
+    use service_common::availability_source::{choose, convert_cfn, load_cache_file, CACHE_FILE};
+    use service_common::region_availability::{Snapshot, Verdict};
+    if std::env::var_os(HOME_PROBE_ENV).is_some() {
+        return; // the child run of this test itself: nothing to do.
+    }
+    let bundled = Snapshot::bundled();
+    let regions: Vec<String> = bundled.regions().to_vec();
+    let everywhere: serde_json::Map<String, serde_json::Value> = regions
+        .iter()
+        .map(|r| (r.clone(), serde_json::Value::from("Available")))
+        .collect();
+    // Full size, so it clears the floor: every bundled type, available everywhere.
+    let mut services: std::collections::BTreeMap<&str, Vec<serde_json::Value>> =
+        std::collections::BTreeMap::new();
+    for name in bundled.resource_types() {
+        let mut parts = name.split("::").skip(1);
+        let (service, kind) = (parts.next().unwrap(), parts.next().unwrap());
+        services.entry(service).or_default().push(
+            serde_json::json!({"resourceTypeName": kind, "regionalAvailability": everywhere}),
+        );
+    }
+    let cfn = serde_json::to_vec(&serde_json::json!(services
+        .iter()
+        .map(|(s, t)| serde_json::json!({"serviceName": s, "resourceTypes": t}))
+        .collect::<Vec<_>>()))
+    .unwrap();
+    let region_rows = serde_json::to_vec(&serde_json::json!(regions
+        .iter()
+        .map(|r| serde_json::json!({ "Region": r }))
+        .collect::<Vec<_>>()))
+    .unwrap();
+    // Just after the bundled data: it wins, and for a real snapshot it is never in the future.
+    let stamp = format!("{}.999999999+00:00", &bundled.last_updated()[..19]);
+    let poison = convert_cfn(
+        "v1",
+        &stamp,
+        &region_rows,
+        &cfn,
+        std::time::SystemTime::now(),
+    )
+    .expect("a valid poisoned cache");
+    let home = std::env::temp_dir().join(format!("gate-home-probe-{}", std::process::id()));
+    let cache_dir = home.join(".aws/emulator/region-availability");
+    std::fs::create_dir_all(&cache_dir).unwrap();
+    std::fs::write(cache_dir.join(CACHE_FILE), poison).unwrap();
+
+    // The control: the poisoned cache loads, wins over the bundled data, and admits Grafana in
+    // Bangkok, which the bundled data refuses.
+    let loaded = load_cache_file(&cache_dir.join(CACHE_FILE)).expect("the cache loads");
+    let bundled = Snapshot::bundled();
+    let chosen = choose(bundled, Some(&loaded));
+    assert!(std::ptr::eq(chosen, &loaded), "the cache would win");
+    assert_eq!(
+        chosen.cfn_resource_type("ap-southeast-7", "AWS::Grafana::Workspace"),
+        Verdict::Available
+    );
+    assert_eq!(
+        bundled.cfn_resource_type("ap-southeast-7", "AWS::Grafana::Workspace"),
+        Verdict::Unavailable
+    );
+
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([BANGKOK_ROW, "--exact", "--test-threads=1"])
+        .env("HOME", &home)
+        .env(HOME_PROBE_ENV, "1")
+        .env_remove("EMULATOR_REGION_AVAILABILITY_CACHE")
+        .env_remove("EMULATOR_REGION_AVAILABILITY")
+        .output()
+        .expect("the child test run starts");
+    let text = String::from_utf8_lossy(&output.stdout);
+    std::fs::remove_dir_all(&home).unwrap();
+    assert!(
+        output.status.success() && text.contains("1 passed"),
+        "with a poisoned cache in $HOME the Bangkok row must still pass: {text}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
