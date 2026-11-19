@@ -841,7 +841,7 @@ pub(crate) mod tests {
         dir
     }
 
-    fn json(value: serde_json::Value) -> Vec<u8> {
+    pub(crate) fn json(value: serde_json::Value) -> Vec<u8> {
         serde_json::to_vec(&value).unwrap()
     }
 

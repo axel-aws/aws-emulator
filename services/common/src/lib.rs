@@ -278,6 +278,9 @@ pub mod region_availability;
 /// Fetching AWS's Regional availability data through its S3 access point, caching it on disk, and
 /// choosing between the cache and the bundled snapshot.
 pub mod availability_source;
+/// Reading the Regional availability data from its S3 access point with the user's own AWS
+/// credentials: a SigV4 signer, the SDK's default credential chain, and an https transport.
+pub mod availability_fetch;
 /// Whether AWS offers an API service in a Region, from the same snapshot data, keyed by the
 /// service's Smithy shape id, and what to do with a request to one it does not.
 pub mod service_availability;
