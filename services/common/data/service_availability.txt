@@ -1,0 +1,422 @@
+# AWS Regional availability data: services (an API service is offered in a Region when any of its operations is)
+# source s3://aws-capabilities-pub-ybkxdwgxrkfhwmq8b1neoq8ny6ua4use1b-s3alias/public/v1/json/apis.json
+# source-sha256 65e9a18100a901762feacdcb23f34f4835db74e70f25925187e348ce3dd5b7c4
+# last_updated 2026-11-18T00:05:07.391849+00:00
+# regions af-south-1 ap-east-1 ap-east-2 ap-northeast-1 ap-northeast-2 ap-northeast-3 ap-south-1 ap-south-2 ap-southeast-1 ap-southeast-2 ap-southeast-3 ap-southeast-4 ap-southeast-5 ap-southeast-6 ap-southeast-7 ca-central-1 ca-west-1 eu-central-1 eu-central-2 eu-north-1 eu-south-1 eu-south-2 eu-west-1 eu-west-2 eu-west-3 eusc-de-east-1 il-central-1 me-central-1 me-south-1 mx-central-1 sa-east-1 us-east-1 us-east-2 us-gov-east-1 us-gov-west-1 us-west-1 us-west-2
+com.amazonaws.accessanalyzer#AccessAnalyzer 1fffffffff AccessAnalyzer
+com.amazonaws.account#Account 19ffffffff Account
+com.amazonaws.accountaccess#AWSAccountAccess 19c1ca8378 Account Access
+com.amazonaws.accountaccessruntime#AWSAccountAccessRuntime 19c1ca8378 Account Access Runtime
+com.amazonaws.acm#CertificateManager 1fefffffff ACM
+com.amazonaws.acmpca#ACMPrivateCA 1fefffffff ACM PCA
+com.amazonaws.agentregistry#AgentRegistry 1580c28208 Agent Registry
+com.amazonaws.agentregistrycontrol#AgentRegistryControl 1780c28308 Agent Registry Control
+com.amazonaws.aiops#AIOps 11806a534a AIOps
+com.amazonaws.amp#AmazonPrometheusService 1fedffffff amp
+com.amazonaws.amplify#Amplify 19c1da837a Amplify
+com.amazonaws.amplifybackend#AmplifyBackend 19c1da8378 AmplifyBackend
+com.amazonaws.amplifyuibuilder#AmplifyUIBuilder 19c1da8378 AmplifyUIBuilder
+com.amazonaws.apigateway#BackplaneControlService 1fffffffff API Gateway
+com.amazonaws.apigatewaymanagementapi#ApiGatewayManagementApi 18818e0312 ApiGatewayManagementApi
+com.amazonaws.apigatewayv2#ApiGatewayV2 1fefffffff ApiGatewayV2
+com.amazonaws.appconfig#AmazonAppConfig 1fefffffff AppConfig
+com.amazonaws.appconfigdata#AppConfigData 1fefffffff AppConfigData
+com.amazonaws.appfabric#FabricFrontEndService 80400008 AppFabric
+com.amazonaws.appflow#SandstoneConfigurationServiceLambda 19c1c28359 Appflow
+com.amazonaws.appintegrations#AmazonAppIntegrationService 1080828319 AppIntegrations
+com.amazonaws.applicationautoscaling#AnyScaleFrontendService 1fefffffff Application Auto Scaling
+com.amazonaws.applicationcostprofiler#AWSApplicationCostProfiler 80000000 ApplicationCostProfiler
+com.amazonaws.applicationdiscoveryservice#AWSPoseidonService_V2015_11_01 1080c20208 Application Discovery Service
+com.amazonaws.applicationinsights#EC2WindowsBarleyService 1fcdff8ffb Application Insights
+com.amazonaws.applicationsignals#ApplicationSignals 1fefffffff Application Signals
+com.amazonaws.appmesh#AppMesh 19c5fe877b App Mesh
+com.amazonaws.apprunner#AppRunner 1181c20348 AppRunner
+com.amazonaws.appstream#PhotonAdminProxyService 17c5f79378 AppStream
+com.amazonaws.appsync#AWSDeepdishControlPlaneService 19cdffdffb AppSync
+com.amazonaws.arcregionswitch#ArcRegionSwitch 1fedffffff ARC Region switch
+com.amazonaws.arczonalshift#PercDataPlane 1fefffffff ARC Zonal Shift
+com.amazonaws.artifact#Artifact 482000000 Artifact
+com.amazonaws.athena#AmazonAthena 1fefffffff Athena
+com.amazonaws.auditmanager#BedrockAssessmentManagerLambda 1980c28348 AuditManager
+com.amazonaws.autoscaling#AutoScaling_2011_01_01 1fefffffff Auto Scaling
+com.amazonaws.autoscalingplans#AnyScaleScalingPlannerFrontendService 1fc1da877b Auto Scaling Plans
+com.amazonaws.b2bi#B2BI 1180408000 b2bi
+com.amazonaws.backup#CryoControllerUserManager 1fffffffff Backup
+com.amazonaws.backupgateway#BackupOnPremises_v20210101 1fc1da837b Backup Gateway
+com.amazonaws.backupsearch#CryoBackupSearchService 1fefffffff BackupSearch
+com.amazonaws.batch#AWSBatchV20160810 1fefffffff Batch
+com.amazonaws.bcmdashboards#AWSBCMDashboardsService 82000000 BCM Dashboards
+com.amazonaws.bcmdataexports#AWSBillingAndCostManagementDataExports 82000000 BCM Data Exports
+com.amazonaws.bcmpricingcalculator#AWSBCMPricingCalculator 80000000 BCM Pricing Calculator
+com.amazonaws.bcmrecommendedactions#AWSBillingAndCostManagementRecommendedActions 196dffffff BCM Recommended Actions
+com.amazonaws.bedrock#AmazonBedrockControlPlaneService 1ffffffffd Bedrock
+com.amazonaws.bedrockagent#AmazonBedrockAgentBuildTimeLambda 17c3fe83f8 Bedrock Agent
+com.amazonaws.bedrockagentcore#AmazonBedrockAgentCore 1dc1fad3d8 Bedrock AgentCore
+com.amazonaws.bedrockagentcorecontrol#AmazonBedrockAgentCoreControl 1fc5fad3d8 Bedrock AgentCore Control
+com.amazonaws.bedrockagentruntime#AmazonBedrockAgentRunTimeService 1feffffffd Bedrock Agent Runtime
+com.amazonaws.bedrockdataautomation#AmazonBedrockKeystoneBuildTimeService 1580e28348 Bedrock Data Automation
+com.amazonaws.bedrockruntime#AmazonBedrockFrontendService 17effffffd Bedrock Runtime
+com.amazonaws.billing#AWSBilling 80000000 Billing
+com.amazonaws.billingconductor#AWSBillingConductor 80000000 billingconductor
+com.amazonaws.braket#Braket 1880880000 Braket
+com.amazonaws.budgets#AWSBudgetServiceGateway 19ffffffff Budgets
+com.amazonaws.chatbot#WheatleyOrchestration_20171011 1100400100 chatbot
+com.amazonaws.chime#UCBuzzConsoleService 80000000 Chime
+com.amazonaws.chimesdkidentity#ChimeIdentityService 16c4828359 Chime SDK Identity
+com.amazonaws.chimesdkmediapipelines#ChimeSDKMediaPipelinesService 1080828358 Chime SDK Media Pipelines
+com.amazonaws.chimesdkmeetings#ChimeMeetingsSDKService 1684828359 Chime SDK Meetings
+com.amazonaws.chimesdkmessaging#ChimeMessagingService 16c4828359 Chime SDK Messaging
+com.amazonaws.chimesdkvoice#ChimeSDKTelephonyService 1080c28318 Chime SDK Voice
+com.amazonaws.cleanrooms#AWSBastionControlPlaneServiceLambda 1180ca0318 CleanRooms
+com.amazonaws.cleanroomsml#AWSStarkControlService 1180ca0318 CleanRoomsML
+com.amazonaws.cloud9#AWSCloud9WorkspaceManagementService 19c5da837b Cloud9
+com.amazonaws.cloudcontrol#CloudApiService 1fefffffff CloudControl
+com.amazonaws.clouddirectory#AmazonCloudDirectory_20170111 1580c28300 CloudDirectory
+com.amazonaws.cloudformation#CloudFormation 1fffffffff CloudFormation
+com.amazonaws.cloudfront#Cloudfront2020_05_31 19ffffffff CloudFront
+com.amazonaws.cloudfrontkeyvaluestore#CloudFrontKeyValueStore 80000000 CloudFront KeyValueStore
+com.amazonaws.cloudhsmv2#BaldrApiService 1fedfff7fb CloudHSM V2
+com.amazonaws.cloudsearch#A9SearchCloudConfigService2013 18c0420318 CloudSearch
+com.amazonaws.cloudsearchdomain#AmazonCloudSearch2013 80000000 CloudSearch Domain
+com.amazonaws.cloudtrail#CloudTrail_20131101 1fefffffff CloudTrail
+com.amazonaws.cloudtraildata#CloudTrailDataService 19c9da877b CloudTrail Data
+com.amazonaws.cloudwatch#GraniteServiceVersion20100801 1fefffffff CloudWatch
+com.amazonaws.cloudwatchlogs#Logs_20140328 1fffffffff CloudWatch Logs
+com.amazonaws.cloudwatchomni#CloudWatchOmniFrontend 11c0c28348 CloudWatchOmni
+com.amazonaws.codeartifact#CodeArtifactControlPlaneService 1181da0348 codeartifact
+com.amazonaws.codebuild#CodeBuild_20161006 1fcffefffb CodeBuild
+com.amazonaws.codecatalyst#CodeCatalyst 1000400000 CodeCatalyst
+com.amazonaws.codecommit#CodeCommit_20150413 1fddda87fb CodeCommit
+com.amazonaws.codeconnections#CodeConnections_20231201 1fc1da8358 CodeConnections
+com.amazonaws.codedeploy#CodeDeploy_20141006 1fffffffff CodeDeploy
+com.amazonaws.codeguruprofiler#CodeGuruProfiler 1180ca0308 CodeGuruProfiler
+com.amazonaws.codegurureviewer#AWSGuruFrontendService 1180ca0308 CodeGuru Reviewer
+com.amazonaws.codepipeline#CodePipeline_20150709 1fcffebffb CodePipeline
+com.amazonaws.codestarconnections#CodeStar_connections_20191201 1fc1da8358 CodeStar connections
+com.amazonaws.codestarnotifications#CodeStarNotifications_20191015 19c1ca835a codestar notifications
+com.amazonaws.cognitoidentity#AWSCognitoIdentityService 1fefffffff Cognito Identity
+com.amazonaws.cognitoidentityprovider#AWSCognitoIdentityProviderService 1fefffffff Cognito Identity Provider
+com.amazonaws.cognitosync#AWSCognitoSyncService 1180c20358 Cognito Sync
+com.amazonaws.comprehend#Comprehend_20171127 1580c28358 Comprehend
+com.amazonaws.comprehendmedical#ComprehendMedical_20181030 1580c08200 ComprehendMedical
+com.amazonaws.computeoptimizer#ComputeOptimizerService 1fcffe8ffb Compute Optimizer
+com.amazonaws.computeoptimizerautomation#ComputeOptimizerAutomationService 19c1ca8378 Compute Optimizer Automation
+com.amazonaws.configservice#StarlingDoveService 1fefffffff Config Service
+com.amazonaws.connect#AmazonConnectService 1480828319 Connect
+com.amazonaws.connectcampaigns#AmazonConnectCampaignService 1080828319 ConnectCampaigns
+com.amazonaws.connectcampaignsv2#AmazonConnectCampaignServiceV2 1080828319 ConnectCampaignsV2
+com.amazonaws.connectcases#AmazonConnectCases 1080828319 ConnectCases
+com.amazonaws.connectcontactlens#AmazonConnectContactLens 1080828359 Connect Contact Lens
+com.amazonaws.connecthealth#ConnectHealth 1080800000 ConnectHealth
+com.amazonaws.connectparticipant#AmazonConnectParticipantServiceLambda 1480828319 ConnectParticipant
+com.amazonaws.continuum#ContinuumControlPlane 1080000000 Continuum
+com.amazonaws.controlcatalog#ControlCatalog 1fefffffff ControlCatalog
+com.amazonaws.controltower#AWSControlTowerApis 1fefffffff ControlTower
+com.amazonaws.costexplorer#AWSInsightsIndexService 19ffffffff Cost Explorer
+com.amazonaws.costoptimizationhub#CostOptimizationHubService 82000000 Cost Optimization Hub
+com.amazonaws.customerprofiles#CustomerProfiles_20200815 1080828319 Customer Profiles
+com.amazonaws.databasemigrationservice#AmazonDMSv20160101 1fffffffff Database Migration Service
+com.amazonaws.databrew#AWSGlueDataBrew 1dc1da835b DataBrew
+com.amazonaws.dataexchange#DataExchange 1980c20318 DataExchange
+com.amazonaws.datapipeline#DataPipeline 1080400208 Data Pipeline
+com.amazonaws.datasync#FmrsService 1fefffffff DataSync
+com.amazonaws.datazone#DataZone 11c1ced35a DataZone
+com.amazonaws.dax#AmazonDAXV3 1fe5ffffff DAX
+com.amazonaws.deadline#Deadline 1180c20318 deadline
+com.amazonaws.detective#AmazonDetective 1fc5da835b Detective
+com.amazonaws.devicefarm#DeviceFarm_20150623 1000000000 Device Farm
+com.amazonaws.devopsagent#DevOpsAgent 15c1ca8358 DevOps Agent
+com.amazonaws.devopsguru#CapstoneControlPlaneService 19c1ca8358 DevOps Guru
+com.amazonaws.directconnect#OvertureService 1fefffffff Direct Connect
+com.amazonaws.directoryservice#DirectoryService_20150416 1fefffffff Directory Service
+com.amazonaws.directoryservicedata#DirectoryServiceData 1fefffffff Directory Service Data
+com.amazonaws.dlm#dlm_20180112 1fefffffff DLM
+com.amazonaws.docdb#AmazonRDSv19 1fffffffff DocDB
+com.amazonaws.docdbelastic#ChimeraDbLionfishServiceLambda 11c1d2835a DocDB Elastic
+com.amazonaws.drs#ElasticDisasterRecoveryService 1fefffffff drs
+com.amazonaws.dsql#DSQL 11c1eb8b7a DSQL
+com.amazonaws.dynamodb#DynamoDB_20120810 1fefffffff DynamoDB
+com.amazonaws.dynamodbstreams#DynamoDBStreams_20120810 1fefffffff DynamoDB Streams
+com.amazonaws.ebs#Ebs 1fefffffff EBS
+com.amazonaws.ec2#AmazonEC2 1fffffffff EC2
+com.amazonaws.ec2instanceconnect#AWSEC2InstanceConnectService 1fefffffff EC2 Instance Connect
+com.amazonaws.ecr#AmazonEC2ContainerRegistry_V20150921 1fffffffff ECR
+com.amazonaws.ecrpublic#SpencerFrontendService 80000000 ECR PUBLIC
+com.amazonaws.ecs#AmazonEC2ContainerServiceV20141113 1fefffffff ECS
+com.amazonaws.efs#MagnolioAPIService_v20150201 1fefffffff EFS
+com.amazonaws.eks#AWSWesleyFrontend 1fefffffff EKS
+com.amazonaws.eksauth#EKSAuthFrontend 1fefffffff EKS Auth
+com.amazonaws.elasticache#AmazonElastiCacheV9 1fefffffff ElastiCache
+com.amazonaws.elasticbeanstalk#AWSElasticBeanstalkService 1fcdfffffb Elastic Beanstalk
+com.amazonaws.elasticloadbalancing#ElasticLoadBalancing_v7 1fefffffff Elastic Load Balancing
+com.amazonaws.elasticloadbalancingv2#ElasticLoadBalancing_v10 1fefffffff Elastic Load Balancing v2
+com.amazonaws.elasticsearchservice#AmazonElasticsearchService2015 1fffffffff Elasticsearch Service
+com.amazonaws.elementalinference#ElementalInference 1080400240 ElementalInference
+com.amazonaws.emr#ElasticMapReduce 1fefffffff EMR
+com.amazonaws.emrcontainers#AwsChicagoWebService 1fcdfec7fb EMR containers
+com.amazonaws.emrserverless#AwsToledoWebService 1fefffffff EMR Serverless
+com.amazonaws.endusermessaging#EndUserMessaging 19e5ffaffd EndUserMessaging
+com.amazonaws.entityresolution#AWSVeniceService 1180c28319 EntityResolution
+com.amazonaws.eventbridge#AWSEvents 1fefffffff EventBridge
+com.amazonaws.eventbridgev2#AWSEventsV2 11806a534a EventBridgeV2
+com.amazonaws.evs#AmazonElasticVMwareService 19e5fff3fd evs
+com.amazonaws.firehose#Firehose_20150804 1fffffffff Firehose
+com.amazonaws.fis#FaultInjectionSimulator 1fc9fe837b fis
+com.amazonaws.fms#AWSFMS_20180101 1fedffffff FMS
+com.amazonaws.forecast#AmazonForecast 1180420358 forecast
+com.amazonaws.forecastquery#AmazonForecastRuntime 1180420358 forecastquery
+com.amazonaws.frauddetector#AWSHawksNestServiceFacade 1180400300 FraudDetector
+com.amazonaws.freetier#AWSFreeTierService 80000000 FreeTier
+com.amazonaws.fsx#AWSSimbaAPIService_v20180301 1fefffffff FSx
+com.amazonaws.gamelift#GameLift 19c0c28358 GameLift
+com.amazonaws.gameliftstreams#GameLiftStreams 1100020008 GameLiftStreams
+com.amazonaws.geomaps#MapsService 11c0ea9348 Geo Maps
+com.amazonaws.geoplaces#PlacesService 11c0ea9348 Geo Places
+com.amazonaws.georoutes#RoutesService 11c0ea9348 Geo Routes
+com.amazonaws.glacier#Glacier 1fc1da877b Glacier
+com.amazonaws.globalaccelerator#GlobalAccelerator_V20180706 1000000000 Global Accelerator
+com.amazonaws.glue#AWSGlue 1fffffffff Glue
+com.amazonaws.grafana#AWSGrafanaControlPlane 1780c20318 grafana
+com.amazonaws.greengrass#Greengrass 1780e29358 Greengrass
+com.amazonaws.greengrassv2#GreengrassV2 1780e29358 GreengrassV2
+com.amazonaws.groundstation#GroundStation 11c04a0311 GroundStation
+com.amazonaws.guardduty#GuardDutyAPIService 1fefffffff GuardDuty
+com.amazonaws.health#AWSHealth_20160804 1fffffffff Health
+com.amazonaws.healthlake#HealthLake 1180c08240 HealthLake
+com.amazonaws.iam#AWSIdentityManagementV20100508 1fffffffff IAM
+com.amazonaws.iamtoolbox#AuthRequestService 19e5ffffff IAM Toolbox
+com.amazonaws.identitystore#AWSIdentityStore 1fefffffff identitystore
+com.amazonaws.imagebuilder#imagebuilder 1fefffffff imagebuilder
+com.amazonaws.inspector#InspectorService 1f80ca0258 Inspector
+com.amazonaws.inspector2#Inspector2 1fedffdfff Inspector2
+com.amazonaws.inspectorscan#InspectorScan 1fedffdfff Inspector Scan
+com.amazonaws.interconnect#Interconnect 1881ce0300 Interconnect
+com.amazonaws.internetmonitor#InternetMonitor20210603 19c9fe8ffb InternetMonitor
+com.amazonaws.invoicing#Invoicing 2000000 Invoicing
+com.amazonaws.iot#AWSIotService 1fcdfa935a IoT
+com.amazonaws.iotdataplane#IotMoonrakerService 80000000 IoT Data Plane
+com.amazonaws.iotdeviceadvisor#IotSenateService 1080400008 IotDeviceAdvisor
+com.amazonaws.iotfleetwise#IoTAutobahnControlPlane 80020040 IoTFleetWise
+com.amazonaws.iotmanagedintegrations#IotManagedIntegrations 80020000 IoT Managed Integrations
+com.amazonaws.iotsecuretunneling#IoTSecuredTunneling 1fcdfa935a IoTSecureTunneling
+com.amazonaws.iotsitewise#AWSIoTSiteWise 1580428358 IoTSiteWise
+com.amazonaws.iottwinmaker#AWSIoTTwinMaker 1480420358 IoTTwinMaker
+com.amazonaws.iotwireless#iotwireless 10c0420208 IoT Wireless
+com.amazonaws.ivs#AmazonInteractiveVideoService 1080420058 ivs
+com.amazonaws.ivschat#AmazonInteractiveVideoServiceChat 1080420058 ivschat
+com.amazonaws.ivsrealtime#AmazonInteractiveVideoServiceRealTime 1080420058 IVS RealTime
+com.amazonaws.kafka#Kafka 1fffffffff Kafka
+com.amazonaws.kafkaconnect#KafkaConnect 1fefffffff KafkaConnect
+com.amazonaws.kendra#AWSKendraFrontendService 1580c08348 kendra
+com.amazonaws.kendraranking#AWSKendraRerankingFrontendService 1180408348 Kendra Ranking
+com.amazonaws.keyspaces#KeyspacesService 1fd9ca835b Keyspaces
+com.amazonaws.kinesis#Kinesis_20131202 1fefffffff Kinesis
+com.amazonaws.kinesisanalytics#KinesisAnalytics_20150814 1fefffffff Kinesis Analytics
+com.amazonaws.kinesisanalyticsv2#KinesisAnalytics_20180523 1fefffffff Kinesis Analytics V2
+com.amazonaws.kinesisvideo#KinesisVideo_20170930 17c5e2935b Kinesis Video
+com.amazonaws.kinesisvideoarchivedmedia#AWSAcuityReader 17c5e2935b Kinesis Video Archived Media
+com.amazonaws.kinesisvideomedia#AWSAcuityInletService 17c5e2935b Kinesis Video Media
+com.amazonaws.kinesisvideosignaling#AWSAcuitySignalingService 17c5e2935b Kinesis Video Signaling
+com.amazonaws.kinesisvideowebrtcstorage#AWSAcuityRoutingServiceLambda 11d1e2935b Kinesis Video WebRTC Storage
+com.amazonaws.kms#TrentService 1fefffffff KMS
+com.amazonaws.lakeformation#AWSLakeFormation 1fefffffff LakeFormation
+com.amazonaws.lambda#AWSGirApiService 1fefffffff Lambda
+com.amazonaws.lambdacore#LambdaCoreApiService 19e5ffffff Lambda Core
+com.amazonaws.lambdamicrovms#LambdaMicrovms 1fefffffff Lambda Microvms
+com.amazonaws.lambdaweb#LambdaWeb 1fefffffff Lambda Web
+com.amazonaws.launchwizard#LaunchWizard 1fedffdfff Launch Wizard
+com.amazonaws.lexmodelsv2#LexModelBuildingServiceV2 1480c28319 Lex Models V2
+com.amazonaws.lexruntimev2#AWSDeepSenseRunTimeServiceApi2_0 1080c28319 Lex Runtime V2
+com.amazonaws.licensemanager#AWSLicenseManager 1fefffffff License Manager
+com.amazonaws.licensemanagerlinuxsubscriptions#LicenseManagerLinuxSubscriptions 1fc1de877f License Manager Linux Subscriptions
+com.amazonaws.licensemanagerusersubscriptions#LicenseManagerUserSubscriptions 1fedffdfff License Manager User Subscriptions
+com.amazonaws.lightsail#Lightsail_20161128 11c1ea975a Lightsail
+com.amazonaws.location#LocationService 15c0ea9348 Location
+com.amazonaws.m2#AwsSupernovaControlPlaneService 1fc5fa8379 m2
+com.amazonaws.machinelearning#AmazonML_20141212 80400000 Machine Learning
+com.amazonaws.macie2#Macie2 19c5da837b Macie2
+com.amazonaws.mailmanager#MailManagerSvc 1feffffffd MailManager
+com.amazonaws.managedblockchain#TaigaWebService 480c00118 ManagedBlockchain
+com.amazonaws.managedblockchainquery#TietonChainQueryService 80000000 ManagedBlockchain Query
+com.amazonaws.marketplaceagreement#AWSMPCommerceService_v20200301 80000000 Marketplace Agreement
+com.amazonaws.marketplacecatalog#AWSMPSeymour 80000000 Marketplace Catalog
+com.amazonaws.marketplacecommerceanalytics#MarketplaceCommerceAnalytics20150701 80000000 Marketplace Commerce Analytics
+com.amazonaws.marketplacedeployment#AWSMPDeploymentParametersService 80000000 Marketplace Deployment
+com.amazonaws.marketplacediscovery#AWSMarketplaceDiscovery 1482400000 Marketplace Discovery
+com.amazonaws.marketplaceentitlementservice#AWSMPEntitlementService 1082000000 Marketplace Entitlement Service
+com.amazonaws.marketplacemetering#AWSMPMeteringService 1fcffe8ffb Marketplace Metering
+com.amazonaws.marketplacereporting#AWSMarketplaceReporting 80000000 Marketplace Reporting
+com.amazonaws.mediaconnect#MediaConnect 19c9ca9bfb MediaConnect
+com.amazonaws.mediaconvert#MediaConvert 1dc9ca9b79 MediaConvert
+com.amazonaws.medialive#MediaLive 11c9ca9bf8 MediaLive
+com.amazonaws.mediapackage#MediaPackage 19c1ca8b78 MediaPackage
+com.amazonaws.mediapackagev2#mediapackagev2 19c9ca9bf8 MediaPackageV2
+com.amazonaws.mediapackagevod#MediaPackageVod 80000000 MediaPackage Vod
+com.amazonaws.mediastore#MediaStore_20170901 1080ca0218 MediaStore
+com.amazonaws.mediastoredata#MediaStoreObject_20170901 1881480108 MediaStore Data
+com.amazonaws.mediatailor#MediaTailor 11c9ca9bf9 MediaTailor
+com.amazonaws.medicalimaging#AHIGatewayService 800000 Medical Imaging
+com.amazonaws.memorydb#AmazonMemoryDB 1fc1fa835a MemoryDB
+com.amazonaws.mgn#ApplicationMigrationService 1fedffffff mgn
+com.amazonaws.migrationhub#AWSMigrationHub 1080c20208 Migration Hub
+com.amazonaws.migrationhubconfig#AWSMigrationHubMultiAccountService 1180c20218 MigrationHub Config
+com.amazonaws.migrationhuborchestrator#AWSMigrationHubOrchestrator 1080c20208 MigrationHubOrchestrator
+com.amazonaws.migrationhubrefactorspaces#RefactorSpaces 19c1ca8378 Migration Hub Refactor Spaces
+com.amazonaws.migrationhubstrategy#AWSMigrationHubStrategyRecommendation 1080c20208 MigrationHubStrategy
+com.amazonaws.mpa#AWSFluffyCoreService 480000000 MPA
+com.amazonaws.mq#mq 1fefffffff mq
+com.amazonaws.mturk#MTurkRequesterServiceV20170117 80000000 MTurk
+com.amazonaws.mwaa#AmazonMWAA 19edffdffb MWAA
+com.amazonaws.mwaaserverless#AmazonMWAAServerless 1fe5ffffff MWAA Serverless
+com.amazonaws.neptune#AmazonRDSv19 1fffffffff Neptune
+com.amazonaws.neptunedata#AmazonNeptuneDataplane 1fdfeb9ffb neptunedata
+com.amazonaws.neptunegraph#AmazonNeptuneGraph 19cdcf937b Neptune Graph
+com.amazonaws.networkfirewall#NetworkFirewall_20201112 1fefffffff Network Firewall
+com.amazonaws.networkflowmonitor#NetworkFlowMonitor 19c1ca8378 NetworkFlowMonitor
+com.amazonaws.networkmanager#NetworkManager 1ffdffffff NetworkManager
+com.amazonaws.networkmonitor#NetworkMonitor 19edffdffb NetworkMonitor
+com.amazonaws.networksecuritymanager#PiccoloCustomerAPIService 19e7ffffff Network Security Manager
+com.amazonaws.notifications#Notifications 19efffdffb Notifications
+com.amazonaws.notificationscontacts#NotificationsContacts 82000000 NotificationsContacts
+com.amazonaws.novaact#AmazonNovaAgentsDataPlane 80000000 Nova Act
+com.amazonaws.oam#oamservice 1fefffffff OAM
+com.amazonaws.observabilityadmin#ObservabilityAdmin 1fe7ffffff ObservabilityAdmin
+com.amazonaws.odb#Odb 19c1fe8bf8 odb
+com.amazonaws.omics#Omics 1184c20118 Omics
+com.amazonaws.opensearch#AmazonOpenSearchService 1fffffffff OpenSearch
+com.amazonaws.opensearchserverless#OpenSearchServerless 1fc1fe83fa OpenSearchServerless
+com.amazonaws.organizations#AWSOrganizationsV20161128 1fffffffff Organizations
+com.amazonaws.osis#AmazonOpenSearchIngestionService 1fc1ea8358 OSIS
+com.amazonaws.outposts#OutpostsOlafService 1fedfa877b Outposts
+com.amazonaws.partnercentralaccount#PartnerCentralAccount 80000000 PartnerCentral Account
+com.amazonaws.partnercentralbenefits#PartnerCentralBenefitsService 80000000 PartnerCentral Benefits
+com.amazonaws.partnercentralchannel#PartnerCentralChannel 80000000 PartnerCentral Channel
+com.amazonaws.partnercentralselling#AWSPartnerCentralSelling 80000000 PartnerCentral Selling
+com.amazonaws.paymentcryptography#PaymentCryptographyControlPlane 11c1c283e9 Payment Cryptography
+com.amazonaws.paymentcryptographydata#PaymentCryptographyDataPlane 11c1c283e9 Payment Cryptography Data
+com.amazonaws.pcaconnectorad#PcaConnectorAd 1fefffffff Pca Connector Ad
+com.amazonaws.pcaconnectorscep#PcaConnectorScep 1defffffff Pca Connector Scep
+com.amazonaws.pcs#AWSParallelComputingService 1fc1fabff9 PCS
+com.amazonaws.personalize#AmazonPersonalize 1180428358 Personalize
+com.amazonaws.personalizeevents#AmazonPersonalizeEvents 1180428b58 Personalize Events
+com.amazonaws.personalizeruntime#AmazonPersonalizeRuntime 1180428b58 Personalize Runtime
+com.amazonaws.pi#PerformanceInsightsv20180227 1fefffffff PI
+com.amazonaws.pinpoint#Pinpoint 1580c28358 Pinpoint
+com.amazonaws.pinpointemail#AmazonPinpointEmailService 1feffffffd Pinpoint Email
+com.amazonaws.pinpointsmsvoice#PinpointSMSVoice 1fefffefff Pinpoint SMS Voice
+com.amazonaws.pinpointsmsvoicev2#PinpointSMSVoiceV2 1fefffaffd Pinpoint SMS Voice V2
+com.amazonaws.pipes#Pipes 19c9fe87fb Pipes
+com.amazonaws.polly#Parrot_v1 1dc3eed37b Polly
+com.amazonaws.pricing#AWSPriceListService 82020040 Pricing
+com.amazonaws.pricingplanmanager#AWSPricingPlanManager 80000000 Pricing Plan Manager
+com.amazonaws.qapps#QAppsService 1080400000 QApps
+com.amazonaws.qbusiness#ExpertQ 1080400200 QBusiness
+com.amazonaws.qconnect#WisdomService 1080828319 QConnect
+com.amazonaws.quicksight#QuickSight_20180401 17cdfe9759 QuickSight
+com.amazonaws.ram#AmazonResourceSharing 1fefffffff RAM
+com.amazonaws.rbin#AmazonRecycleBin 1fefffffff rbin
+com.amazonaws.rds#AmazonRDSv19 1fffffffff RDS
+com.amazonaws.rdsdata#RdsDataService 1981c28778 RDS Data
+com.amazonaws.redshift#RedshiftServiceVersion20121201 1fffffffff Redshift
+com.amazonaws.redshiftdata#RedshiftData 1fefffffff Redshift Data
+com.amazonaws.redshiftserverless#RedshiftServerless 1fefffffff Redshift Serverless
+com.amazonaws.rekognition#RekognitionService 1dc4e2d358 Rekognition
+com.amazonaws.repostspace#RepostSpace 1080428300 repostspace
+com.amazonaws.resiliencehub#AwsResilienceHub 1fc1da835b resiliencehub
+com.amazonaws.resiliencehubv2#NGRHServiceCore 1fc1da835b resiliencehubv2
+com.amazonaws.resourceexplorer2#ResourceExplorer 1fedffffff Resource Explorer 2
+com.amazonaws.resourcegroups#Ardi 1fefffffff Resource Groups
+com.amazonaws.resourcegroupstaggingapi#ResourceGroupsTaggingAPI_20170126 1fefffffff Resource Groups Tagging API
+com.amazonaws.rolesanywhere#RolesAnywhere 1fefffffff RolesAnywhere
+com.amazonaws.route53#AWSDnsV20130401 1fffffffff Route 53
+com.amazonaws.route53domains#Route53Domains_v20140515 80000000 Route 53 Domains
+com.amazonaws.route53globalresolver#EC2DNSGlobalResolverCustomerAPI 1fefffffff Route53GlobalResolver
+com.amazonaws.route53profiles#Route53Profiles 1fefffffff Route53Profiles
+com.amazonaws.route53recoverycluster#ToggleCustomerAPI 1080400208 Route53 Recovery Cluster
+com.amazonaws.route53recoverycontrolconfig#Route53RecoveryControlConfig 19fdffffff Route53 Recovery Control Config
+com.amazonaws.route53recoveryreadiness#Route53RecoveryReadiness 1000000000 Route53 Recovery Readiness
+com.amazonaws.route53resolver#Route53Resolver 1fefffffff Route53Resolver
+com.amazonaws.rtbfabric#RTBFabric 1080420108 RTBFabric
+com.amazonaws.rum#RUM 1fefffdffb RUM
+com.amazonaws.s3#AmazonS3 1fffffffff S3
+com.amazonaws.s3control#AWSS3ControlServiceV20180820 1fcfff8ffb S3 Control
+com.amazonaws.s3files#S3Files 1fe5ffffff S3Files
+com.amazonaws.s3outposts#S3Outposts 1fc5da877b S3Outposts
+com.amazonaws.s3tables#S3TableBuckets 1fefffffff S3Tables
+com.amazonaws.s3vectors#S3Vectors 1fe3ffffff S3Vectors
+com.amazonaws.sagemaker#SageMaker 1fefffffff SageMaker
+com.amazonaws.sagemakera2iruntime#AmazonSageMakerA2IRuntime 1180c28358 SageMaker A2I Runtime
+com.amazonaws.sagemakergeospatial#SageMakerGeospatial 1000000000 SageMaker Geospatial
+com.amazonaws.sagemakermetrics#SageMakerMetricsService 19eddfefff SageMaker Metrics
+com.amazonaws.sagemakerruntime#AmazonSageMakerRuntime 1fedffffff SageMaker Runtime
+com.amazonaws.sagemakertrainingsessionruntime#LegoRouterService 1080000040 SageMakerTrainingSessionRuntime
+com.amazonaws.savingsplans#AWSSavingsPlan 19ffffffff savingsplans
+com.amazonaws.scheduler#AWSChronosService 1fefffffff Scheduler
+com.amazonaws.schemas#schemas 1fc9fe877b schemas
+com.amazonaws.secretsmanager#secretsmanager 1fefffffff Secrets Manager
+com.amazonaws.securityagent#SecurityAgent 1181ca8218 SecurityAgent
+com.amazonaws.securityhub#SecurityHubAPIService 1fefffffff SecurityHub
+com.amazonaws.securityir#SecurityIncidentResponse 11c9fe8fdb Security IR
+com.amazonaws.securitylake#SecurityLake 1fc1ca8378 SecurityLake
+com.amazonaws.serverlessapplicationrepository#ServerlessApplicationRepository 1fc1ca835a ServerlessApplicationRepository
+com.amazonaws.servicecatalog#AWS242ServiceCatalogService 1fcdffaffb Service Catalog
+com.amazonaws.servicecatalogappregistry#AWS242AppRegistry 1fcdff8ffb Service Catalog AppRegistry
+com.amazonaws.servicediscovery#Route53AutoNaming_v20170314 1fefffffff ServiceDiscovery
+com.amazonaws.servicequotas#ServiceQuotasV20190624 1fefffffff Service Quotas
+com.amazonaws.ses#SimpleEmailService 1feffffffd SES
+com.amazonaws.sesv2#SimpleEmailService_v2 1feffffffd SESv2
+com.amazonaws.sfn#AWSStepFunctions 1fffffffff SFN
+com.amazonaws.shield#AWSShield_20160616 19fdffffff Shield
+com.amazonaws.signer#WallabyService 1fc3da835b signer
+com.amazonaws.signerdata#SignerDataPlane 1fc3da875b Signer Data
+com.amazonaws.signin#Signin 19edffffff Signin
+com.amazonaws.simpledbv2#SimpleDBv2 18c0400308 SimpleDBv2
+com.amazonaws.snowball#AWSIESnowballJobManagementService 1fcdda877b Snowball
+com.amazonaws.snowdevicemanagement#SnowDeviceManagement 19c1ca835a Snow Device Management
+com.amazonaws.sns#AmazonSimpleNotificationService 1fffffffff SNS
+com.amazonaws.socialmessaging#SocialMessaging 19edffffff SocialMessaging
+com.amazonaws.sqs#AmazonSQS 1fffffffff SQS
+com.amazonaws.ssm#AmazonSSM 1fffffffff SSM
+com.amazonaws.ssmcontacts#SSMContacts 19c1ca8358 SSM Contacts
+com.amazonaws.ssmguiconnect#SSMGuiConnect 1fefffffff SSM GuiConnect
+com.amazonaws.ssmincidents#SSMIncidents 19c1ca8358 SSM Incidents
+com.amazonaws.ssmquicksetup#QuickSetup 19c1ca8358 SSM QuickSetup
+com.amazonaws.ssmsap#SsmSap 19cdfe8ffb Ssm Sap
+com.amazonaws.sso#SWBPortalService 1fefffffff SSO
+com.amazonaws.ssoadmin#SWBExternalService 1fefffffff SSO Admin
+com.amazonaws.ssooidc#AWSSSOOIDCService 1fefffffff SSO OIDC
+com.amazonaws.storagegateway#StorageGateway_20130630 1fefffffff Storage Gateway
+com.amazonaws.sts#AWSSecurityTokenServiceV20110615 1fffffffff STS
+com.amazonaws.support#AWSSupport_20130415 1fffffffff Support
+com.amazonaws.supportapp#SupportApp 1080400000 Support App
+com.amazonaws.supportauthz#SupportAuthZ 19e5ffffff SupportAuthZ
+com.amazonaws.sustainability#AwsSustainabilityApiService 1082000000 Sustainability
+com.amazonaws.swf#SimpleWorkflowService 1fefffffff SWF
+com.amazonaws.synthetics#Synthetics 1fefffffff synthetics
+com.amazonaws.taxsettings#TaxSettings 82000000 TaxSettings
+com.amazonaws.textract#Textract 1f81e68358 Textract
+com.amazonaws.timestreaminfluxdb#AmazonTimestreamInfluxDB 11edfecffb Timestream InfluxDB
+com.amazonaws.timestreamquery#Timestream_20181101 1580420248 Timestream Query
+com.amazonaws.timestreamwrite#Timestream_20181101 1580420248 Timestream Write
+com.amazonaws.transcribe#Transcribe 1fc3ce835b Transcribe
+com.amazonaws.transfer#TransferService 1fefffffff Transfer
+com.amazonaws.translate#AWSShineFrontendService_20170701 1d81ca835a Translate
+com.amazonaws.trustedadvisor#TrustedAdvisor 1182400210 TrustedAdvisor
+com.amazonaws.uxc#AWSAccountUXSetting 19e5ffffff uxc
+com.amazonaws.verifiedpermissions#VerifiedPermissions 1fefffffff VerifiedPermissions
+com.amazonaws.voiceid#VoiceID 1080828308 Voice ID
+com.amazonaws.vpclattice#MercuryControlPlane 19f9ff9ffb VPC Lattice
+com.amazonaws.waf#AWSWAF_20150824 1fcdfe8ffb WAF
+com.amazonaws.wafregional#AWSWAF_Regional_20161128 1fcdfe8ffb WAF Regional
+com.amazonaws.wafv2#AWSWAF_20190729 1fffffffff WAFV2
+com.amazonaws.wellarchitected#WellArchitectedApiServiceLambda 1fc1ca835a WellArchitected
+com.amazonaws.wickr#WickrAdminApi 4888e9308 Wickr
+com.amazonaws.wisdom#WisdomService 1080828318 Wisdom
+com.amazonaws.workdocs#AWSGorillaBoyService 1080400308 WorkDocs
+com.amazonaws.workmail#WorkMailService 1080400000 WorkMail
+com.amazonaws.workmailmessageflow#GiraffeMessageInTransitService 1080400000 WorkMailMessageFlow
+com.amazonaws.workspaces#WorkspacesService 17c5c29359 WorkSpaces
+com.amazonaws.workspacesinstances#EUCMIFrontendAPIService 11cde2935b Workspaces Instances
+com.amazonaws.workspacesthinclient#ThinClient 1080c28040 WorkSpaces Thin Client
+com.amazonaws.workspacesweb#AWSErmineControlPlaneService 1080c28348 WorkSpaces Web
+com.amazonaws.xray#AWSXRay 1fefffffff XRay
