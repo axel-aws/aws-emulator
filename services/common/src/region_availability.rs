@@ -32,12 +32,46 @@
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The environment variable that selects the [`Mode`].
 pub const MODE_ENV: &str = "EMULATOR_REGION_AVAILABILITY";
 
+/// How many days old the data may be before a message or the log says so.
+pub const STALE_AFTER_DAYS: i64 = 30;
+
 /// The bundled snapshot of CloudFormation resource type availability.
 const BUNDLED_CFN: &str = include_str!("../data/cfn_resource_availability.txt");
+
+/// Whole days from a dataset's `last_updated` time (RFC 3339) to `now`. `None` when the date
+/// cannot be read. Negative when the data is dated after the clock.
+pub fn age_days(last_updated: &str, now: SystemTime) -> Option<i64> {
+    let today = i64::try_from(now.duration_since(UNIX_EPOCH).ok()?.as_secs() / 86_400).ok()?;
+    Some(today - days_from_date(last_updated.get(..10)?)?)
+}
+
+/// A clause saying how old the data is, once it is older than [`STALE_AFTER_DAYS`].
+pub fn staleness_note(last_updated: &str, now: SystemTime) -> Option<String> {
+    let age = age_days(last_updated, now)?;
+    (age > STALE_AFTER_DAYS).then(|| format!("that data is {age} days old, so check it is current"))
+}
+
+/// Days since 1970-01-01 of a `YYYY-MM-DD` date (proleptic Gregorian calendar).
+fn days_from_date(date: &str) -> Option<i64> {
+    let mut parts = date.split('-');
+    let year: i64 = parts.next()?.parse().ok()?;
+    let month: i64 = parts.next()?.parse().ok()?;
+    let day: i64 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+        return None;
+    }
+    let year = if month <= 2 { year - 1 } else { year };
+    let era = year.div_euclid(400);
+    let year_of_era = year - era * 400;
+    let day_of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+    let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
+    Some(era * 146_097 + day_of_era - 719_468)
+}
 
 /// What the emulator does with a request the data says the Region cannot serve.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -138,7 +172,15 @@ impl Snapshot {
     pub fn bundled() -> &'static Snapshot {
         static BUNDLED: OnceLock<Snapshot> = OnceLock::new();
         BUNDLED.get_or_init(|| {
-            Snapshot::parse(BUNDLED_CFN).expect("the bundled availability snapshot is well formed")
+            let snapshot = Snapshot::parse(BUNDLED_CFN)
+                .expect("the bundled availability snapshot is well formed");
+            if let Some(note) = snapshot.staleness_note(SystemTime::now()) {
+                tracing::warn!(
+                    "the bundled AWS Regional availability data of {}: {note}",
+                    snapshot.data_date()
+                );
+            }
+            snapshot
         })
     }
 
@@ -150,6 +192,11 @@ impl Snapshot {
     /// The date part of [`Self::last_updated`], for messages.
     pub fn data_date(&self) -> &str {
         self.last_updated.get(..10).unwrap_or(&self.last_updated)
+    }
+
+    /// [`staleness_note`] for this snapshot.
+    pub fn staleness_note(&self, now: SystemTime) -> Option<String> {
+        staleness_note(&self.last_updated, now)
     }
 
     /// How many types the snapshot lists.
@@ -266,6 +313,60 @@ mod tests {
             let error = Snapshot::parse(text).unwrap_err();
             assert!(error.contains(expected), "{text:?}: got {error:?}");
         }
+    }
+
+    /// A moment `days` whole days after 1970-01-01, plus a few hours.
+    fn day(days: u64) -> SystemTime {
+        UNIX_EPOCH + std::time::Duration::from_secs(days * 86_400 + 5 * 3_600)
+    }
+
+    #[test]
+    fn a_date_counts_days_from_1970() {
+        let cases = [
+            ("1970-01-01", Some(0)),
+            ("2000-03-01", Some(11_017)),
+            ("2026-11-17", Some(20_774)),
+            ("2026-11-17T00:03:09+00:00", None),
+            ("2026-13-01", None),
+            ("2026-11-00", None),
+            ("2026-11", None),
+            ("2026-11-17-1", None),
+            ("november", None),
+        ];
+        for (date, expected) in cases {
+            assert_eq!(days_from_date(date), expected, "{date}");
+        }
+    }
+
+    #[test]
+    fn data_is_stale_only_past_the_limit() {
+        // The dataset's own time stamp, dated 2026-11-17 (day 20_774).
+        let stamp = "2026-11-17T00:03:09.441208+00:00";
+        assert_eq!(age_days(stamp, day(20_774)), Some(0));
+        assert_eq!(age_days(stamp, day(20_774 + 30)), Some(30));
+        assert_eq!(staleness_note(stamp, day(20_774)), None);
+        assert_eq!(
+            staleness_note(stamp, day(20_774 + 30)),
+            None,
+            "30 days is the limit"
+        );
+        assert_eq!(
+            staleness_note(stamp, day(20_774 + 31)).as_deref(),
+            Some("that data is 31 days old, so check it is current")
+        );
+        // Data dated after the clock is not stale, and an unreadable date says nothing.
+        assert_eq!(age_days(stamp, day(20_700)), Some(-74));
+        assert_eq!(staleness_note(stamp, day(20_700)), None);
+        assert_eq!(staleness_note("unknown", day(30_000)), None);
+        assert_eq!(staleness_note("", day(30_000)), None);
+    }
+
+    #[test]
+    fn a_snapshot_reports_its_own_staleness() {
+        let snapshot = Snapshot::parse(SAMPLE).unwrap();
+        let note = snapshot.staleness_note(day(20_774 + 31)).unwrap();
+        assert!(note.contains("31 days old"), "{note}");
+        assert_eq!(snapshot.staleness_note(day(20_774 + 5)), None);
     }
 
     #[test]

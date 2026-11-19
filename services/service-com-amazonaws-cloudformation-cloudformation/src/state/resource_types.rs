@@ -1219,9 +1219,24 @@ pub fn unavailable_message(
     region: &str,
     snapshot: &service_common::region_availability::Snapshot,
 ) -> String {
+    unavailable_message_at(types, region, snapshot, std::time::SystemTime::now())
+}
+
+/// [`unavailable_message`] as of `now`, which decides whether the message says the data is old
+/// (older than `service_common::region_availability::STALE_AFTER_DAYS`).
+pub fn unavailable_message_at(
+    types: &[String],
+    region: &str,
+    snapshot: &service_common::region_availability::Snapshot,
+    now: std::time::SystemTime,
+) -> String {
+    let age = snapshot
+        .staleness_note(now)
+        .map(|note| format!("{note}; "))
+        .unwrap_or_default();
     format!(
         "{} (AWS Regional availability data of {} lists {} as not available in {region}; \
-         set {}=off to skip this check)",
+         {age}set {}=off to skip this check)",
         unrecognized_message(types),
         snapshot.data_date(),
         if types.len() == 1 { "it" } else { "them" },
@@ -1395,10 +1410,13 @@ mod tests {
         assert!(refuse(Mode::Off).is_ok(), "off does not look");
         assert!(named(&plain, "xx-test-1").is_empty());
         assert!(named(&transformed, "ap-southeast-7").is_empty());
-        let message = unavailable_message(
+        // 2026-11-18, the day after the snapshot above, so the data is not old.
+        let now = std::time::UNIX_EPOCH + std::time::Duration::from_secs(20_775 * 86_400);
+        let message = unavailable_message_at(
             &named(&plain, "ap-southeast-7"),
             "ap-southeast-7",
             &snapshot,
+            now,
         );
         assert_eq!(
             message,
@@ -1505,6 +1523,50 @@ mod tests {
             regions.len() * AWS_RESOURCE_TYPES.len()
         );
         assert!(refused > 0 && admitted > 0 && not_in_data > 0);
+    }
+
+    /// Once the data is older than the limit the refusal says so, between the Region and the
+    /// way to skip the check, and the rest of the sentence is unchanged.
+    #[test]
+    fn a_refusal_says_when_its_data_is_old() {
+        use service_common::region_availability::Snapshot;
+        let snapshot = Snapshot::parse(
+            "# last_updated 2026-11-17T00:03:09+00:00\n# regions us-east-1 ap-southeast-7\n\
+             AWS::MemoryDB::Cluster 1\n",
+        )
+        .unwrap();
+        let types = vec!["AWS::MemoryDB::Cluster".to_string()];
+        let at = |days: u64| {
+            let now = std::time::UNIX_EPOCH + std::time::Duration::from_secs(days * 86_400);
+            unavailable_message_at(&types, "ap-southeast-7", &snapshot, now)
+        };
+        assert!(!at(20_774 + 30).contains("days old"));
+        assert_eq!(
+            at(20_774 + 45),
+            "Template format error: Unrecognized resource types: [AWS::MemoryDB::Cluster] (AWS \
+             Regional availability data of 2026-11-17 lists it as not available in \
+             ap-southeast-7; that data is 45 days old, so check it is current; set \
+             EMULATOR_REGION_AVAILABILITY=off to skip this check)"
+        );
+    }
+
+    /// The message the gate sends reads the real clock: data dated years back is always old,
+    /// whatever day this runs, and data dated in the future never is.
+    #[test]
+    fn the_refusal_the_gate_sends_reads_the_real_clock() {
+        use service_common::region_availability::Snapshot;
+        let types = vec!["AWS::MemoryDB::Cluster".to_string()];
+        let message = |stamp: &str| {
+            let text = format!(
+                "# last_updated {stamp}\n# regions us-east-1 ap-southeast-7\n\
+                 AWS::MemoryDB::Cluster 1\n"
+            );
+            let snapshot = Snapshot::parse(&text).unwrap();
+            unavailable_message(&types, "ap-southeast-7", &snapshot)
+        };
+        assert!(message("2020-01-01T00:00:00+00:00")
+            .contains(" days old, so check it is current; set "));
+        assert!(!message("2999-01-01T00:00:00+00:00").contains("days old"));
     }
 
     /// What the data does not list is never refused: a Region it omits (a Region newer than
