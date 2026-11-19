@@ -573,6 +573,14 @@ impl<Eng: ::std::marker::Send + ::std::marker::Sync + 'static> smithy_server_run
         // `crate::state::resource_types` for the recognised set.
         crate::state::validate_resource_types(&template_body)
             .map_err(crate::scaffolded::Scaffolded::validation_error)?;
+        // A type AWS does not offer in the Region this request is signed for is refused the
+        // same way, so a template that fails there is not driven to CREATE_COMPLETE here
+        // (`crate::state::validate_resource_types_in_region`).
+        crate::state::validate_resource_types_in_region(
+            &template_body,
+            &crate::state::request_region(ctx.parts()),
+        )
+        .map_err(crate::scaffolded::Scaffolded::validation_error)?;
         // "In some cases, you must explicitly acknowledge that your stack template contains
         // certain capabilities in order for CloudFormation to create the stack": a template
         // whose IAM resources this request did not acknowledge is refused HERE, before the

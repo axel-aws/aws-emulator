@@ -447,6 +447,12 @@ impl<Eng: ::std::marker::Send + ::std::marker::Sync + 'static> smithy_server_run
             // set is created (`crate::state::resource_types`).
             crate::state::validate_resource_types(body)
                 .map_err(crate::scaffolded::Scaffolded::validation_error)?;
+            // And a type AWS does not offer in this request's Region is refused too.
+            crate::state::validate_resource_types_in_region(
+                body,
+                &crate::state::request_region(ctx.parts()),
+            )
+            .map_err(crate::scaffolded::Scaffolded::validation_error)?;
         }
         // The values this change set would deploy with: what a language-extensions
         // directive, a mapping lookup or a key an expression decides resolves against, and

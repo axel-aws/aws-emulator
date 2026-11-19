@@ -272,6 +272,9 @@ pub mod docdb_engine_catalog;
 /// The Availability Zone names a Region exposes, for the reports that offer a resource in
 /// the zones of a Region.
 pub mod aws_availability_zones;
+/// Whether AWS publishes a resource, such as a CloudFormation resource type, in a Region,
+/// from a snapshot of AWS's Regional availability data, and what to do when it does not.
+pub mod region_availability;
 /// The event source types the one `rds` front door publishes a category map for, and the
 /// categories of each — one catalog for the three service views it serves, so
 /// `DescribeEventCategories` answers every view with the rows, and the order, that front

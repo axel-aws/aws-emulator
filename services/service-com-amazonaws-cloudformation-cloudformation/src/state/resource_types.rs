@@ -1151,6 +1151,84 @@ pub fn refuse_unrecognized(body: &str, template: &Template) -> Result<(), String
     Err(unrecognized_message(&unrecognized))
 }
 
+/// The types `template` declares that `snapshot` says CloudFormation does not offer in
+/// `region`, in declaration order and without repetition.
+///
+/// A type or a Region the snapshot does not list is never named (see
+/// `service_common::region_availability`), and neither is any type of a template that
+/// declares a `Transform`, for the reason [`unrecognized_in`] gives. A resource under a
+/// `Condition` counts, as it does there.
+pub fn unavailable_in(
+    body: &str,
+    template: &Template,
+    region: &str,
+    snapshot: &service_common::region_availability::Snapshot,
+) -> Vec<String> {
+    use service_common::region_availability::Verdict;
+    if !template.transforms.is_empty() {
+        return Vec::new();
+    }
+    let declared = super::declaration_order::as_declared(
+        body,
+        super::declaration_order::RESOURCES,
+        &template.resources,
+        |resource| resource.logical_id.as_str(),
+    );
+    let mut found: Vec<String> = Vec::new();
+    for resource in declared {
+        if snapshot.cfn_resource_type(region, &resource.resource_type) == Verdict::Unavailable
+            && !found.contains(&resource.resource_type)
+        {
+            found.push(resource.resource_type.clone());
+        }
+    }
+    found
+}
+
+/// `Err(message)` for a template declaring a type `snapshot` says AWS does not offer in
+/// `region`, or `Ok(())`. `Mode::Warn` logs the message and admits the template; `Mode::Off`
+/// does not look.
+pub fn refuse_unavailable(
+    mode: service_common::region_availability::Mode,
+    body: &str,
+    template: &Template,
+    region: &str,
+    snapshot: &service_common::region_availability::Snapshot,
+) -> Result<(), String> {
+    use service_common::region_availability::Mode;
+    if mode == Mode::Off {
+        return Ok(());
+    }
+    let types = unavailable_in(body, template, region, snapshot);
+    if types.is_empty() {
+        return Ok(());
+    }
+    let message = unavailable_message(&types, region, snapshot);
+    if mode == Mode::Warn {
+        tracing::warn!("{message}");
+        return Ok(());
+    }
+    Err(message)
+}
+
+/// The refusal for types AWS does not offer in `region`: CloudFormation's own sentence for a
+/// type it does not know (which is what it answers there), then the Region and the date of
+/// the data that says so, so the reader can tell this refusal from a misspelled type.
+pub fn unavailable_message(
+    types: &[String],
+    region: &str,
+    snapshot: &service_common::region_availability::Snapshot,
+) -> String {
+    format!(
+        "{} (AWS Regional availability data of {} lists {} as not available in {region}; \
+         set {}=off to skip this check)",
+        unrecognized_message(types),
+        snapshot.data_date(),
+        if types.len() == 1 { "it" } else { "them" },
+        service_common::region_availability::MODE_ENV,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1278,5 +1356,189 @@ mod tests {
                  resource type, it does not"
             );
         }
+    }
+
+    /// A template names the types the snapshot says the Region lacks, once each and in the
+    /// order it declares them, and names nothing for a Region that has them, a type the data
+    /// does not list, or a template whose `Transform` may expand into other types.
+    #[test]
+    fn a_template_names_only_the_types_the_region_lacks() {
+        use service_common::region_availability::{Mode, Snapshot};
+        let snapshot = Snapshot::parse(
+            "# last_updated 2026-11-17T00:03:09+00:00\n# regions us-east-1 ap-southeast-7\n\
+             AWS::MemoryDB::Cluster 1\nAWS::MemoryDB::User 1\nAWS::SQS::Queue 3\n",
+        )
+        .unwrap();
+        let resources = r#""Resources": {
+            "Db": {"Type": "AWS::MemoryDB::Cluster"},
+            "Queue": {"Type": "AWS::SQS::Queue"},
+            "Custom": {"Type": "Custom::Thing"},
+            "Db2": {"Type": "AWS::MemoryDB::Cluster"},
+            "User": {"Type": "AWS::MemoryDB::User"}
+        }"#;
+        let plain = format!("{{{resources}}}");
+        let transformed = format!(r#"{{"Transform": "MyMacro", {resources}}}"#);
+        let named = |body: &str, region: &str| {
+            let template = super::super::template::parse(body).unwrap();
+            unavailable_in(body, &template, region, &snapshot)
+        };
+        assert_eq!(
+            named(&plain, "ap-southeast-7"),
+            ["AWS::MemoryDB::Cluster", "AWS::MemoryDB::User"]
+        );
+        assert!(named(&plain, "us-east-1").is_empty());
+        let template = super::super::template::parse(&plain).unwrap();
+        let refuse =
+            |mode| refuse_unavailable(mode, &plain, &template, "ap-southeast-7", &snapshot);
+        assert!(refuse(Mode::Enforce).is_err());
+        assert!(refuse(Mode::Warn).is_ok(), "warn admits the template");
+        assert!(refuse(Mode::Off).is_ok(), "off does not look");
+        assert!(named(&plain, "xx-test-1").is_empty());
+        assert!(named(&transformed, "ap-southeast-7").is_empty());
+        let message = unavailable_message(
+            &named(&plain, "ap-southeast-7"),
+            "ap-southeast-7",
+            &snapshot,
+        );
+        assert_eq!(
+            message,
+            "Template format error: Unrecognized resource types: \
+             [AWS::MemoryDB::Cluster, AWS::MemoryDB::User] (AWS Regional availability data of \
+             2026-11-17 lists them as not available in ap-southeast-7; set \
+             EMULATOR_REGION_AVAILABILITY=off to skip this check)"
+        );
+    }
+
+    /// The bundled data, decoded a second time here by a reader that shares no code with the
+    /// loader, so the sweeps below hold the gate to the data and not to itself.
+    fn independent_decode() -> (
+        Vec<&'static str>,
+        std::collections::HashMap<&'static str, u64>,
+    ) {
+        const TEXT: &str = include_str!("../../../common/data/cfn_resource_availability.txt");
+        let regions = TEXT
+            .lines()
+            .find_map(|line| line.strip_prefix("# regions "))
+            .expect("a regions header")
+            .split_whitespace()
+            .collect();
+        let masks = TEXT
+            .lines()
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .map(|line| {
+                let (name, mask) = line.rsplit_once(' ').expect("a type and a mask");
+                (name, u64::from_str_radix(mask, 16).expect("a hex mask"))
+            })
+            .collect();
+        (regions, masks)
+    }
+
+    fn one_resource(resource_type: &str) -> String {
+        format!(r#"{{"Resources":{{"R":{{"Type":"{resource_type}"}}}}}}"#)
+    }
+
+    /// Every catalogued type in every Region the data lists: a pair the data marks
+    /// unavailable is refused, naming the type and the Region, and every other pair is
+    /// admitted. So there are no missed refusals and no false ones, over the whole table.
+    /// Also, per Region, one template holding every missing type is refused naming exactly
+    /// those types, in declaration order.
+    #[test]
+    fn every_pair_the_data_marks_unavailable_is_refused_and_every_other_is_admitted() {
+        use service_common::region_availability::{Mode, Snapshot};
+        let snapshot = Snapshot::bundled();
+        let (regions, masks) = independent_decode();
+        let (mut refused, mut admitted, mut not_in_data) = (0usize, 0usize, 0usize);
+        for (bit, region) in regions.iter().enumerate() {
+            let mut missing_here: Vec<String> = Vec::new();
+            for resource_type in AWS_RESOURCE_TYPES {
+                let body = one_resource(resource_type);
+                let template = super::super::template::parse(&body).unwrap();
+                let outcome = refuse_unavailable(Mode::Enforce, &body, &template, region, snapshot);
+                match masks.get(resource_type) {
+                    Some(mask) if mask >> bit & 1 == 0 => {
+                        let message = outcome.expect_err("a missing type must be refused");
+                        assert!(
+                            message.contains(&format!("[{resource_type}]"))
+                                && message.contains(&format!("not available in {region};")),
+                            "{resource_type} in {region}: {message}"
+                        );
+                        missing_here.push((*resource_type).to_string());
+                        refused += 1;
+                    }
+                    Some(_) => {
+                        assert_eq!(outcome, Ok(()), "{resource_type} in {region}");
+                        admitted += 1;
+                    }
+                    None => {
+                        assert_eq!(outcome, Ok(()), "{resource_type} in {region}");
+                        not_in_data += 1;
+                    }
+                }
+            }
+            println!(
+                "  {region}: refuses {} of {} catalogue types",
+                missing_here.len(),
+                AWS_RESOURCE_TYPES.len()
+            );
+            let resources: Vec<String> = missing_here
+                .iter()
+                .enumerate()
+                .map(|(index, resource_type)| format!(r#""R{index}":{{"Type":"{resource_type}"}}"#))
+                .collect();
+            let body = format!(r#"{{"Resources":{{{}}}}}"#, resources.join(","));
+            let template = super::super::template::parse(&body).unwrap();
+            assert_eq!(
+                unavailable_in(&body, &template, region, snapshot),
+                missing_here,
+                "one template holding every missing type in {region}"
+            );
+        }
+        println!(
+            "sweep: {} Regions x {} catalogue types = {} pairs; refused {refused}, admitted \
+             {admitted}, type not in data {not_in_data}",
+            regions.len(),
+            AWS_RESOURCE_TYPES.len(),
+            refused + admitted + not_in_data
+        );
+        assert_eq!(
+            refused + admitted + not_in_data,
+            regions.len() * AWS_RESOURCE_TYPES.len()
+        );
+        assert!(refused > 0 && admitted > 0 && not_in_data > 0);
+    }
+
+    /// What the data does not list is never refused: a Region it omits (a Region newer than
+    /// the data, or a partition it leaves out) for every catalogued type, and a type it omits
+    /// in every Region it lists.
+    #[test]
+    fn a_region_or_type_the_data_does_not_list_is_never_refused() {
+        use service_common::region_availability::{Mode, Snapshot};
+        let snapshot = Snapshot::bundled();
+        let (regions, _) = independent_decode();
+        let admitted = |region: &str, resource_type: &str| {
+            let body = one_resource(resource_type);
+            let template = super::super::template::parse(&body).unwrap();
+            refuse_unavailable(Mode::Enforce, &body, &template, region, snapshot) == Ok(())
+        };
+        let mut checked = 0usize;
+        for region in ["xx-test-1", "cn-north-1", "cn-northwest-1", ""] {
+            for resource_type in AWS_RESOURCE_TYPES {
+                assert!(
+                    admitted(region, resource_type),
+                    "{resource_type} in {region:?}"
+                );
+                checked += 1;
+            }
+        }
+        for region in &regions {
+            for resource_type in ["AWS::Made::Up", "Custom::Thing", "AWS::CDK::Metadata"] {
+                assert!(
+                    admitted(region, resource_type),
+                    "{resource_type} in {region}"
+                );
+                checked += 1;
+            }
+        }
+        println!("unlisted sweep: {checked} pairs admitted");
     }
 }

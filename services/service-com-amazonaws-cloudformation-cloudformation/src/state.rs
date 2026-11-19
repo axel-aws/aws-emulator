@@ -1054,6 +1054,31 @@ pub fn validate_resource_types(template_body: &str) -> Result<(), String> {
     }
 }
 
+/// `Err(message)` for a template declaring a resource type AWS does not offer in `region`,
+/// by AWS's published Regional availability data, the way CloudFormation refuses a type it
+/// does not know. Called after [`validate_resource_types`], so every type here is already a
+/// recognised one.
+///
+/// What it does follows [`service_common::region_availability::Mode`]: `enforce` refuses,
+/// `warn` logs what it would have refused and admits the template, `off` does not look.
+pub fn validate_resource_types_in_region(template_body: &str, region: &str) -> Result<(), String> {
+    use service_common::region_availability::{Mode, Snapshot};
+    let mode = Mode::from_env();
+    if mode == Mode::Off {
+        return Ok(());
+    }
+    match template::parse(template_body) {
+        Some(template) => resource_types::refuse_unavailable(
+            mode,
+            template_body,
+            &template,
+            region,
+            Snapshot::bundled(),
+        ),
+        None => Ok(()),
+    }
+}
+
 /// `Err(message)` for a template declaring a resource type the request's own
 /// `ResourceTypes` does not cover — the bound every operation that states that member is
 /// held to, before anything is created ([`resource_type_allow_list`] is where the rule
