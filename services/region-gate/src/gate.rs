@@ -18,20 +18,21 @@
 //! data.
 
 use crate::basics::Mode;
-use crate::service_availability::{decide, Decision, ServiceSnapshot};
+use crate::service_availability::{self, decide, Decision, ServiceSnapshot};
 use std::time::SystemTime;
 
 /// The error code of a refusal. Not a code AWS sends: see the module notes.
 pub const REFUSAL_CODE: &str = "UnknownEndpoint";
 
 /// The refusal for a request to the service with Smithy shape id `shape_id`, signed for `region`,
-/// under the mode `EMULATOR_REGION_AVAILABILITY` selects and the bundled data; `None` to serve it.
+/// under the mode `EMULATOR_REGION_AVAILABILITY` selects and the table in use (the bundled one, or a
+/// newer one a refresh installed); `None` to serve it.
 /// With the setting unset the mode is `warn` ([`Mode::ROUTER_DEFAULT`]): the request is served and
 /// the refusal it would get is logged. A user asks for refusals with `enforce`.
 pub fn refusal(shape_id: &str, region: &str) -> Option<String> {
     refusal_with(
         Mode::from_env_or(Mode::ROUTER_DEFAULT),
-        ServiceSnapshot::bundled(),
+        &service_availability::current(),
         shape_id,
         region,
         SystemTime::now(),
@@ -131,21 +132,22 @@ mod tests {
         assert_eq!(ask(APPSYNC, "ap-southeast-7"), None, "the control");
     }
 
-    /// Known real offers that the bundled table has listed wrongly: AWS documents IoT device
-    /// data endpoints in many Regions, and the table has listed IoT Data Plane in us-east-1 only.
-    /// Under the router's default they are served, whatever the table says, so this test holds
-    /// before and after the table is fixed. What `enforce` does is tested on rows that are right.
+    /// IoT Data Plane is offered wherever IoT Core is, though the dataset lists it in us-east-1 only
+    /// (its endpoints belong to an account). The bundled table is corrected when it is read, so the
+    /// service is served in those Regions under `enforce` too.
     #[test]
-    fn known_real_offers_the_table_gets_wrong_are_served_by_default() {
+    fn a_service_the_data_lists_wrongly_is_served_even_under_enforce() {
         let bundled = ServiceSnapshot::bundled();
         let iot_data = "com.amazonaws.iotdataplane#IotMoonrakerService";
         let now = std::time::SystemTime::now();
         for region in ["eu-west-1", "us-west-2", "us-east-1"] {
-            assert_eq!(
-                refusal_with(Mode::ROUTER_DEFAULT, bundled, iot_data, region, now),
-                None,
-                "IoT Data Plane in {region} under the default"
-            );
+            for mode in [Mode::ROUTER_DEFAULT, Mode::Enforce] {
+                assert_eq!(
+                    refusal_with(mode, bundled, iot_data, region, now),
+                    None,
+                    "IoT Data Plane in {region} under {mode:?}"
+                );
+            }
         }
     }
 

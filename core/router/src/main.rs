@@ -177,6 +177,10 @@ async fn build_and_serve(options: RunOptions) {
 
     tracing::info!("aws-emulator emulator starting");
 
+    // Regional availability data: use what an earlier run cached, and look for newer data in the
+    // background. Never waits and never fails; see `service_common::availability_refresh`.
+    let _availability_refresh = service_common::availability_refresh::start();
+
     let telemetry = start_telemetry(options.telemetry);
     if let Some(idle_timeout) = options.idle_timeout {
         emulator_server::cli::stop_after_idle(idle_timeout);

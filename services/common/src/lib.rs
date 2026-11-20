@@ -284,6 +284,10 @@ pub mod availability_fetch;
 /// The `refresh-region-data` command: refresh the cached Regional availability data on request,
 /// and say which data is in use.
 pub mod availability_cli;
+/// The API service table, refreshed from the dataset's `apis.json` and kept in a cache file.
+pub mod availability_services;
+/// The refresh at start-up and on a timer: when it runs, what it fetches and how it fails softly.
+pub mod availability_refresh;
 /// Whether AWS offers an API service in a Region, from the same snapshot data, keyed by the
 /// service's Smithy shape id, and what to do with a request to one it does not.
 pub use region_gate::service_availability;

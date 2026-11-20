@@ -1076,7 +1076,7 @@ pub fn validate_resource_types_in_region(template_body: &str, region: &str) -> R
             template_body,
             &template,
             region,
-            availability_source::current(),
+            &availability_source::current(),
         ),
         None => Ok(()),
     }

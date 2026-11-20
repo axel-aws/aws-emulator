@@ -24,15 +24,25 @@
 //! does not list answer [`Verdict::Unknown`], and [`decide`] lets the request through. Only a
 //! listed service in a listed Region whose bit is clear is [`Verdict::Unavailable`].
 //!
+//! ## Services the data lists wrongly
+//!
+//! The dataset lists the operations of a service by Region. A service whose endpoint belongs to
+//! one account or one resource (IoT Data Plane, CloudSearch Domain) or that shares its Regions
+//! with a sibling (MediaPackage Vod) has no operation of its own in most Regions, so the data
+//! lists it in one Region or none while AWS serves it in many. [`SAME_REGIONS_AS`] and
+//! [`OFFERED_IN`] correct the four cases checked against AWS's endpoint tables (see their notes).
+//! The correction is applied whenever a table is read, the bundled one and a refreshed one, so a
+//! refresh cannot bring the wrong rows back.
+//!
 //! shortcut: service level only. A listed service that is offered in a Region but lacks one of
 //! its operations there is not caught; add an operation level to the snapshot when that is
 //! wanted. The request router calls [`decide`] through [`crate::gate`], right after it has named
-//! the service and before the operation runs. The table is bundled; the refresh command does
-//! not update it (the dataset's `apis.json` needs a converter of its own).
+//! the service and before the operation runs. The bundled table is the one in use until a refresh
+//! installs a newer one ([`install`]; the refresh is `service_common::availability_services`).
 
 use crate::basics::{staleness_note, Mode, Verdict, MODE_ENV};
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock, RwLock};
 use std::time::SystemTime;
 
 /// The bundled snapshot of API service availability.
@@ -48,6 +58,43 @@ pub enum Decision {
     /// Refuse it with this message.
     Refuse(String),
 }
+
+/// Services offered wherever another listed service is: the service's own row and the sibling's
+/// `sdkId` (the third column of the table). Checked against AWS's documentation on 2026-11-20:
+/// - IoT Data Plane: "The AWS IoT Core - data plane endpoints are specific to each AWS account and
+///   AWS Region", one set for every Region IoT Core is in (General Reference, "AWS IoT Core
+///   endpoints and quotas"). Sibling: IoT.
+/// - MediaPackage Vod: the VOD endpoint table lists the same 18 Regions as the V1 live table
+///   (General Reference, "AWS Elemental MediaPackage endpoints and quotas"). Sibling: MediaPackage.
+/// - CloudSearch Domain: a domain's own search endpoint exists wherever the domain does, so in the
+///   10 Regions CloudSearch is in (General Reference, "Amazon CloudSearch endpoints and quotas").
+///   Sibling: CloudSearch.
+const SAME_REGIONS_AS: &[(&str, &str)] = &[
+    ("com.amazonaws.iotdataplane#IotMoonrakerService", "IoT"),
+    (
+        "com.amazonaws.mediapackagevod#MediaPackageVod",
+        "MediaPackage",
+    ),
+    (
+        "com.amazonaws.cloudsearchdomain#AmazonCloudSearch2013",
+        "CloudSearch",
+    ),
+];
+
+/// Services with no sibling to follow, and the Regions AWS documents for them. Medical Imaging
+/// (AWS HealthImaging): us-east-1, us-west-2, ap-southeast-2, eu-west-1 and eu-west-2 (General
+/// Reference, "AWS HealthImaging endpoints and quotas", checked 2026-11-20); the data lists
+/// eu-west-2 only.
+const OFFERED_IN: &[(&str, &[&str])] = &[(
+    "com.amazonaws.medicalimaging#AHIGatewayService",
+    &[
+        "us-east-1",
+        "us-west-2",
+        "ap-southeast-2",
+        "eu-west-1",
+        "eu-west-2",
+    ],
+)];
 
 #[derive(Debug)]
 struct Entry {
@@ -104,27 +151,18 @@ impl ServiceSnapshot {
                 },
             );
         }
+        let regions = regions.ok_or("missing `# regions` header")?;
+        apply_known_offers(&regions, &mut services);
         Ok(ServiceSnapshot {
             last_updated: last_updated.ok_or("missing `# last_updated` header")?,
-            regions: regions.ok_or("missing `# regions` header")?,
+            regions,
             services,
         })
     }
 
     /// The snapshot bundled in this crate, parsed once.
     pub fn bundled() -> &'static ServiceSnapshot {
-        static BUNDLED: OnceLock<ServiceSnapshot> = OnceLock::new();
-        BUNDLED.get_or_init(|| {
-            let snapshot = ServiceSnapshot::parse(BUNDLED_SERVICES)
-                .expect("the bundled service availability snapshot is well formed");
-            if let Some(note) = staleness_note(&snapshot.last_updated, SystemTime::now()) {
-                tracing::warn!(
-                    "the bundled AWS Regional availability data of {}: {note}",
-                    snapshot.data_date()
-                );
-            }
-            snapshot
-        })
+        bundled_arc()
     }
 
     /// The dataset's `last_updated` time, as published (RFC 3339).
@@ -145,6 +183,13 @@ impl ServiceSnapshot {
     /// The Regions the snapshot lists.
     pub fn regions(&self) -> &[String] {
         &self.regions
+    }
+
+    /// Each listed service: its Smithy shape id and its `sdkId`.
+    pub fn rows(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.services
+            .iter()
+            .map(|(shape_id, entry)| (shape_id.as_str(), entry.sdk_id.as_str()))
     }
 
     /// The Smithy shape ids of the services the snapshot lists.
@@ -183,6 +228,63 @@ impl ServiceSnapshot {
             entry.sdk_id,
             self.data_date(),
         ))
+    }
+}
+
+/// [`ServiceSnapshot::bundled`], as the shared pointer the table in use is held in.
+pub fn bundled_arc() -> &'static Arc<ServiceSnapshot> {
+    static BUNDLED: OnceLock<Arc<ServiceSnapshot>> = OnceLock::new();
+    BUNDLED.get_or_init(|| {
+        let snapshot = ServiceSnapshot::parse(BUNDLED_SERVICES)
+            .expect("the bundled service availability snapshot is well formed");
+        if let Some(note) = staleness_note(&snapshot.last_updated, SystemTime::now()) {
+            tracing::warn!(
+                "the bundled AWS Regional availability data of {}: {note}",
+                snapshot.data_date()
+            );
+        }
+        Arc::new(snapshot)
+    })
+}
+
+/// A newer table installed while the emulator runs (see `service_common::availability_refresh`).
+static INSTALLED: RwLock<Option<Arc<ServiceSnapshot>>> = RwLock::new(None);
+
+/// The table the request check reads: the installed one, else the bundled one. Cheap: a read
+/// lock and a reference count, once per request.
+pub fn current() -> Arc<ServiceSnapshot> {
+    let installed = INSTALLED.read().unwrap_or_else(|e| e.into_inner());
+    match installed.as_ref() {
+        Some(table) => Arc::clone(table),
+        None => Arc::clone(bundled_arc()),
+    }
+}
+
+/// Make `table` the one the request check reads. The caller has already decided it is complete and
+/// newer (`service_common::availability_services`); this only swaps the pointer.
+pub fn install(table: Arc<ServiceSnapshot>) {
+    *INSTALLED.write().unwrap_or_else(|e| e.into_inner()) = Some(table);
+}
+
+/// Set the bits [`SAME_REGIONS_AS`] and [`OFFERED_IN`] name.
+fn apply_known_offers(regions: &[String], services: &mut HashMap<String, Entry>) {
+    for (shape_id, sibling) in SAME_REGIONS_AS {
+        let sibling_mask = services
+            .values()
+            .find(|entry| entry.sdk_id == *sibling)
+            .map(|entry| entry.mask);
+        if let (Some(mask), Some(entry)) = (sibling_mask, services.get_mut(*shape_id)) {
+            entry.mask |= mask;
+        }
+    }
+    for (shape_id, offered) in OFFERED_IN {
+        if let Some(entry) = services.get_mut(*shape_id) {
+            for region in *offered {
+                if let Some(bit) = regions.iter().position(|listed| listed == region) {
+                    entry.mask |= 1 << bit;
+                }
+            }
+        }
     }
 }
 
@@ -385,6 +487,12 @@ mod tests {
             let shape_id = fields.next().unwrap();
             let mask = u64::from_str_radix(fields.next().unwrap(), 16).unwrap();
             services += 1;
+            // The four rows the corrections change are tested on their own, below.
+            if SAME_REGIONS_AS.iter().any(|(id, _)| *id == shape_id)
+                || OFFERED_IN.iter().any(|(id, _)| *id == shape_id)
+            {
+                continue;
+            }
             for (bit, region) in regions.iter().enumerate() {
                 let decision = decide(Mode::Enforce, snapshot, shape_id, region, soon());
                 if mask >> bit & 1 == 0 {
@@ -406,7 +514,10 @@ mod tests {
             refused + allowed
         );
         assert_eq!(services, snapshot.service_count());
-        assert_eq!(refused + allowed, services * regions.len());
+        assert_eq!(
+            refused + allowed,
+            (services - SAME_REGIONS_AS.len() - OFFERED_IN.len()) * regions.len()
+        );
         assert!(refused > 0 && allowed > 0);
         for region in ["xx-test-1", "cn-north-1", "cn-northwest-1", ""] {
             for shape_id in snapshot.shape_ids() {
@@ -417,6 +528,103 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// The four services the data lists wrongly are served wherever AWS documents them, and a
+    /// Region AWS does not document for them still refuses.
+    #[test]
+    fn the_corrected_services_are_offered_where_aws_documents_them() {
+        let snapshot = ServiceSnapshot::bundled();
+        let ask = |shape_id: &str, region: &str| {
+            decide(Mode::Enforce, snapshot, shape_id, region, soon())
+        };
+        let iot_data = "com.amazonaws.iotdataplane#IotMoonrakerService";
+        let vod = "com.amazonaws.mediapackagevod#MediaPackageVod";
+        let search = "com.amazonaws.cloudsearchdomain#AmazonCloudSearch2013";
+        let imaging = "com.amazonaws.medicalimaging#AHIGatewayService";
+        for region in [
+            "us-east-1",
+            "us-west-2",
+            "eu-west-1",
+            "ap-southeast-2",
+            "sa-east-1",
+        ] {
+            assert_eq!(
+                ask(iot_data, region),
+                Decision::Allow,
+                "IoT Data Plane in {region}"
+            );
+        }
+        for region in ["us-west-2", "eu-west-1", "ap-northeast-1", "sa-east-1"] {
+            assert_eq!(
+                ask(vod, region),
+                Decision::Allow,
+                "MediaPackage Vod in {region}"
+            );
+        }
+        for region in [
+            "us-east-1",
+            "us-west-1",
+            "us-west-2",
+            "ap-northeast-1",
+            "ap-northeast-2",
+            "ap-southeast-1",
+            "ap-southeast-2",
+            "eu-central-1",
+            "eu-west-1",
+            "sa-east-1",
+        ] {
+            assert_eq!(
+                ask(search, region),
+                Decision::Allow,
+                "CloudSearch Domain in {region}"
+            );
+        }
+        for region in [
+            "us-east-1",
+            "us-west-2",
+            "ap-southeast-2",
+            "eu-west-1",
+            "eu-west-2",
+        ] {
+            assert_eq!(
+                ask(imaging, region),
+                Decision::Allow,
+                "Medical Imaging in {region}"
+            );
+        }
+        // Where AWS has no endpoint for them, the corrected services still refuse.
+        for shape_id in [iot_data, vod, search, imaging] {
+            assert!(
+                matches!(ask(shape_id, "ap-southeast-7"), Decision::Refuse(_)),
+                "{shape_id} in Bangkok"
+            );
+        }
+    }
+
+    /// A refreshed table is corrected too, because the correction is applied by `parse`.
+    #[test]
+    fn a_table_that_lists_the_four_wrongly_is_corrected_when_read() {
+        let text = "# last_updated 2026-11-20T00:03:08.592803+00:00\n\
+                    # regions us-east-1 us-west-2 eu-west-1 ap-southeast-7\n\
+                    com.amazonaws.iot#AWSIotService 7 IoT\n\
+                    com.amazonaws.iotdataplane#IotMoonrakerService 1 IoT Data Plane\n\
+                    com.amazonaws.medicalimaging#AHIGatewayService 4 Medical Imaging\n";
+        let snapshot = ServiceSnapshot::parse(text).unwrap();
+        let iot_data = "com.amazonaws.iotdataplane#IotMoonrakerService";
+        assert_eq!(snapshot.service("us-west-2", iot_data), Verdict::Available);
+        assert_eq!(snapshot.service("eu-west-1", iot_data), Verdict::Available);
+        assert_eq!(
+            snapshot.service("ap-southeast-7", iot_data),
+            Verdict::Unavailable
+        );
+        let imaging = "com.amazonaws.medicalimaging#AHIGatewayService";
+        assert_eq!(snapshot.service("us-east-1", imaging), Verdict::Available);
+        assert_eq!(snapshot.service("eu-west-1", imaging), Verdict::Available);
+        assert_eq!(
+            snapshot.service("ap-southeast-7", imaging),
+            Verdict::Unavailable
+        );
     }
 
     /// The join is sound: every service the snapshot lists is a service this repository

@@ -448,6 +448,8 @@ service-com-amazonaws-workspacesthinclient-thinclient = { workspace = true }
 service-com-amazonaws-workspacesweb-awserminecontrolplaneservice = { workspace = true }
 service-com-amazonaws-xray-awsxray = { workspace = true }
 emulator-server = { workspace = true }
+# Starts the background refresh of the Regional availability data (`availability_refresh`).
+service-common = { path = "../../services/common" }
 emulator-telemetry = { workspace = true }
 smithy-server-runtime = { workspace = true }
 aws-smithy-runtime-api = { workspace = true }

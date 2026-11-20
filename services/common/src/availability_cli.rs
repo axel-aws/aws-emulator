@@ -3,23 +3,22 @@
 //! The `refresh-region-data` command: fetch newer Regional availability data with the user's own
 //! AWS credentials and say which data is in use.
 //!
-//! **Nothing here runs unless a user asks.** The emulator never refreshes at start-up and never
-//! on a request; `availability_source::current()` has no fetcher to call. The command is the one
-//! way to refresh, and it is a separate program, `refresh-region-data`, built from this crate
-//! (`cargo run -p service-common --bin refresh-region-data`). Adding it to the emulator's own
-//! command line is one call to [`main`], in code the maintainers own.
+//! A user runs this by hand, as a separate program (`cargo run -p service-common --bin
+//! refresh-region-data`), to refresh now and to see what happens. The emulator program also
+//! refreshes by itself in the background (see [`crate::availability_refresh`]); this command
+//! is the same refresh, run in the foreground with its result printed, and it ignores the
+//! `EMULATOR_REGION_AVAILABILITY_REFRESH` switch because the user asked for it.
 //!
-//! The command does what the earlier changes built: it signs the reads with the SDK's default
-//! credential chain ([`crate::availability_fetch::sdk_fetcher`]) and writes the cache through the
-//! sealed writer ([`crate::availability_source::refresh`]). A failure of any kind leaves the
-//! cache as it was, so the data in use stays what it was.
-//!
-//! shortcut: it refreshes the CloudFormation resource types only. The API service table that the
-//! request router's check reads is bundled and is not refreshed (the dataset's `apis.json` is
-//! about forty times larger and needs a converter of its own); upgrade when that converter
-//! exists.
+//! The command signs the reads with the SDK's default credential chain
+//! ([`crate::availability_fetch::sdk_fetcher`]) and writes the caches through the sealed writer
+//! ([`crate::availability_source::refresh`], [`crate::availability_services::refresh_services`]).
+//! A failure of any kind leaves the caches as they were, so the data in use stays what it was.
 
 use crate::availability_fetch::sdk_fetcher;
+use crate::availability_refresh::{switches, REFRESH_ENV};
+use crate::availability_services::{
+    load_service_cache, refresh_services, wins as service_wins, SERVICE_CACHE_FILE,
+};
 use crate::availability_source::{
     cache_dir, choose, current_cache_status, refresh, CacheStatus, ObjectFetcher, CACHE_FILE,
 };
@@ -33,8 +32,9 @@ const USAGE: &str = "\
 Usage: refresh-region-data [--profile NAME] [--status]
 
 Fetches AWS's Regional availability data through its S3 access point, signed with your own
-AWS credentials (the AWS SDK's default credential chain), and keeps it in a cache file the
-emulator reads next time it starts. Nothing is fetched unless you run this.
+AWS credentials (the AWS SDK's default credential chain), and keeps it in cache files
+the emulator reads when it starts: the CloudFormation resource types and the API service table.
+The emulator also refreshes them by itself in the background; this command does it now.
 
   --profile NAME   read credentials from this AWS profile
                    (or set EMULATOR_REGION_AVAILABILITY_PROFILE)
@@ -45,6 +45,10 @@ The cache folder is EMULATOR_REGION_AVAILABILITY_CACHE, else $XDG_CACHE_HOME/aws
 region-availability, else ~/.cache/aws-emulator/region-availability. Nothing is written to ~/.aws.
 
 With no credentials the emulator keeps using the data bundled with it.
+
+Settings: EMULATOR_REGION_AVAILABILITY=off turns every Regional availability check, and the
+refresh, off. EMULATOR_REGION_AVAILABILITY_REFRESH=off turns off only the emulator's own
+background refresh (this command still works).
 ";
 
 /// Gives the fetcher for a profile, or says why there is none. A real run signs with the AWS
@@ -156,8 +160,36 @@ pub fn run(
                     return 1;
                 }
             }
+            let services = ServiceSnapshot::bundled();
+            let mut code = 0;
+            match refresh_services(fetcher.as_ref(), folder, now, services) {
+                Ok((done, _)) if done.written => {
+                    let _ = writeln!(
+                        out,
+                        "Refreshed: API services dated {}, {} services, {} Regions, written to {}.",
+                        done.last_updated,
+                        done.types,
+                        done.regions,
+                        folder.join(SERVICE_CACHE_FILE).display()
+                    );
+                }
+                Ok((done, _)) => {
+                    let _ = writeln!(
+                        out,
+                        "Nothing to do: the service cache already holds this data (dated {}) or newer.",
+                        done.last_updated
+                    );
+                }
+                Err(why) => {
+                    let _ = writeln!(
+                        out,
+                        "Could not refresh the API service table: {why}. The table in use is unchanged."
+                    );
+                    code = 1;
+                }
+            }
             let _ = write!(out, "{}", status_text(cache_folder, now));
-            0
+            code
         }
     }
 }
@@ -225,11 +257,23 @@ pub fn status_text(cache_folder: Option<&Path>, now: SystemTime) -> String {
         (CacheStatus::InUse, Some(folder)) => format!("{} is in use", folder.join(CACHE_FILE).display()),
     };
     text.push_str(&format!("    cache: {cache_line}\n"));
-    text.push_str(&format!(
-        "  API services: the bundled snapshot, dated {} ({}); this command does not refresh it\n",
-        services.last_updated(),
-        age_in_words(services.last_updated(), now)
-    ));
+    let service_cache = cache_folder
+        .map(|folder| folder.join(SERVICE_CACHE_FILE))
+        .and_then(|path| load_service_cache(&path))
+        .filter(|cache| service_wins(cache, services, now));
+    match &service_cache {
+        Some(cache) => text.push_str(&format!(
+            "  API services: the refreshed cache, dated {} ({}); the bundled snapshot is dated {}\n",
+            cache.last_updated(),
+            age_in_words(cache.last_updated(), now),
+            services.last_updated()
+        )),
+        None => text.push_str(&format!(
+            "  API services: the bundled snapshot, dated {} ({}); no newer cache is in use\n",
+            services.last_updated(),
+            age_in_words(services.last_updated(), now)
+        )),
+    }
     let name = |mode: Mode| match mode {
         Mode::Off => "off",
         Mode::Warn => "warn",
@@ -240,6 +284,14 @@ pub fn status_text(cache_folder: Option<&Path>, now: SystemTime) -> String {
         name(Mode::from_env()),
         name(Mode::from_env_or(Mode::ROUTER_DEFAULT)),
     ));
+    let setting = switches(
+        std::env::var(MODE_ENV).ok().as_deref(),
+        std::env::var(REFRESH_ENV).ok().as_deref(),
+    );
+    text.push_str(&format!(
+        "  The emulator's own background refresh ({REFRESH_ENV}): {}.\n",
+        if setting.refresh { "on" } else { "off" }
+    ));
     text
 }
 
@@ -249,7 +301,7 @@ mod tests {
     use crate::availability_fetch::{HttpReply, HttpTransport, SignedFetcher, Signer};
     use crate::availability_source::{
         convert_cfn, load_cache_file,
-        tests::{after_bundled, bundled_as_json, dataset, dataset_with, now, temp_dir},
+        tests::{after_bundled, bundled_as_json, dataset, now, temp_dir},
         ACCESS_POINT_ALIAS,
     };
     use std::cell::RefCell;
@@ -314,8 +366,7 @@ mod tests {
 
     /// A full-size dataset dated `seconds` after the bundled snapshot.
     fn full_dataset(seconds: i64) -> BTreeMap<String, Vec<u8>> {
-        let (regions, cfn, _) = bundled_as_json();
-        dataset_with(&after_bundled(seconds), 37, regions, cfn)
+        crate::availability_refresh::fixtures::dataset_after(seconds, false)
     }
 
     /// A factory whose fetcher signs with a fake signer and reads from `files`, or answers every
@@ -377,7 +428,7 @@ mod tests {
             text.contains("API services: the bundled snapshot, dated"),
             "{text}"
         );
-        assert!(text.contains("this command does not refresh it"), "{text}");
+        assert!(text.contains("no newer cache is in use"), "{text}");
         assert!(
             text.contains("Checks (EMULATOR_REGION_AVAILABILITY): CloudFormation templates "),
             "{text}"
@@ -415,10 +466,15 @@ mod tests {
         // The cache is a sealed file the loader reads.
         let cache = load_cache_file(&folder.join(CACHE_FILE)).expect("a whole cache");
         assert_eq!(cache.last_updated(), stamp);
-        // Four reads, each signed first, each to the access point host and nothing else.
+        // The service table is refreshed too, into its own sealed cache.
+        assert!(text.contains("Refreshed: API services dated"), "{text}");
+        let services = load_service_cache(&folder.join(SERVICE_CACHE_FILE)).expect("a whole cache");
+        assert_eq!(services.last_updated(), stamp);
+        // Eight reads (four for each table), each signed first, each to the access point host and
+        // nothing else.
         let seen = seen.borrow();
-        assert_eq!(seen.signed, 4);
-        assert_eq!(seen.hosts.len(), 4);
+        assert_eq!(seen.signed, 8);
+        assert_eq!(seen.hosts.len(), 8);
         for host in &seen.hosts {
             assert_eq!(
                 host,
@@ -530,10 +586,7 @@ mod tests {
         let (code, text) = run_with(&["--help"], &never, None);
         assert_eq!(code, 0);
         assert!(text.starts_with("Usage: refresh-region-data"), "{text}");
-        assert!(
-            text.contains("Nothing is fetched unless you run this."),
-            "{text}"
-        );
+        assert!(text.contains("this command does it now"), "{text}");
     }
 
     #[test]

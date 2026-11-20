@@ -47,7 +47,7 @@ use std::fmt;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// The alias of the AWS Regional availability access point. Used as the bucket name.
@@ -66,9 +66,10 @@ pub const CACHE_FILE: &str = "cfn_resource_availability.txt";
 const INDEX_KEY: &str = "public/index.json";
 const MAX_INDEX_BYTES: usize = 64 * 1024;
 const MAX_MANIFEST_BYTES: usize = 1024 * 1024;
-const MAX_REGIONS_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_REGIONS_BYTES: usize = 1024 * 1024;
 const MAX_CFN_BYTES: usize = 64 * 1024 * 1024;
-const MAX_CACHE_BYTES: usize = 8 * 1024 * 1024;
+pub(crate) const MAX_APIS_BYTES: usize = 64 * 1024 * 1024;
+pub(crate) const MAX_CACHE_BYTES: usize = 8 * 1024 * 1024;
 
 /// One object to fetch. The bucket is always the access point alias.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -142,7 +143,7 @@ impl ObjectFetcher for DirFetcher {
     }
 }
 
-fn read_capped(path: &Path, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
+pub(crate) fn read_capped(path: &Path, max_bytes: usize) -> Result<Vec<u8>, FetchError> {
     let file = std::fs::File::open(path).map_err(|error| match error.kind() {
         std::io::ErrorKind::NotFound => FetchError::NotFound,
         std::io::ErrorKind::PermissionDenied => FetchError::Denied(error.to_string()),
@@ -204,20 +205,89 @@ struct IndexVersion {
 }
 
 #[derive(Deserialize)]
-struct Manifest {
-    last_updated: String,
-    entities: BTreeMap<String, Entity>,
+pub(crate) struct Manifest {
+    pub(crate) last_updated: String,
+    pub(crate) entities: BTreeMap<String, Entity>,
 }
 
 #[derive(Deserialize)]
-struct Entity {
-    record_count: u64,
+pub(crate) struct Entity {
+    pub(crate) record_count: u64,
 }
 
 #[derive(Deserialize)]
-struct RegionRow {
+pub(crate) struct RegionRow {
     #[serde(rename = "Region")]
-    region: String,
+    pub(crate) region: String,
+}
+
+/// The dataset's latest version and its manifest, read and cross-checked.
+pub(crate) struct Header {
+    pub(crate) version: String,
+    pub(crate) manifest: Manifest,
+}
+
+/// Fetch one object of the dataset, as a [`RefreshError`] says it when it fails.
+pub(crate) fn fetch_object(
+    fetcher: &dyn ObjectFetcher,
+    key: String,
+    max_bytes: usize,
+) -> Result<Vec<u8>, RefreshError> {
+    fetcher
+        .get(&ObjectRequest::new(key.clone()), max_bytes)
+        .map_err(|error| RefreshError::Fetch { key, error })
+}
+
+/// The `last_updated` the index gives the latest version: one small read, so a caller can see
+/// that nothing is newer before it fetches the large files. `None` when the index gives none.
+pub fn latest_stamp(fetcher: &dyn ObjectFetcher) -> Result<Option<String>, RefreshError> {
+    let index: Index = serde_json::from_slice(&fetch_object(
+        fetcher,
+        INDEX_KEY.to_string(),
+        MAX_INDEX_BYTES,
+    )?)
+    .map_err(|e| data_error("index.json", e))?;
+    Ok(index
+        .versions
+        .get(&index.latest_version)
+        .and_then(|entry| entry.last_updated.clone()))
+}
+
+/// Read the index and the manifest it points at, and check they agree.
+pub(crate) fn fetch_header(fetcher: &dyn ObjectFetcher) -> Result<Header, RefreshError> {
+    let index: Index = serde_json::from_slice(&fetch_object(
+        fetcher,
+        INDEX_KEY.to_string(),
+        MAX_INDEX_BYTES,
+    )?)
+    .map_err(|e| data_error("index.json", e))?;
+    let version = index.latest_version;
+    if !valid_version(&version) {
+        return Err(RefreshError::Data(format!("version {version:?}")));
+    }
+    let manifest_key = format!("public/{version}/manifest.json");
+    let Some(entry) = index
+        .versions
+        .get(&version)
+        .filter(|entry| entry.manifest == manifest_key)
+    else {
+        return Err(RefreshError::Data(format!(
+            "the index does not point {version} at {manifest_key}"
+        )));
+    };
+    let manifest: Manifest =
+        serde_json::from_slice(&fetch_object(fetcher, manifest_key, MAX_MANIFEST_BYTES)?)
+            .map_err(|e| data_error("manifest.json", e))?;
+    if entry
+        .last_updated
+        .as_deref()
+        .is_some_and(|stamp| stamp != manifest.last_updated)
+    {
+        return Err(RefreshError::Data(
+            "the index and the manifest give different dates".to_string(),
+        ));
+    }
+    Ok(Header { version, manifest })
 }
 
 #[derive(Deserialize)]
@@ -236,12 +306,35 @@ struct CfnType {
     availability: BTreeMap<String, String>,
 }
 
-fn data_error(what: &str, error: impl fmt::Display) -> RefreshError {
+pub(crate) fn data_error(what: &str, error: impl fmt::Display) -> RefreshError {
     RefreshError::Data(format!("{what}: {error}"))
 }
 
-fn alphanumeric(text: &str) -> bool {
+pub(crate) fn alphanumeric(text: &str) -> bool {
     !text.is_empty() && text.bytes().all(|byte| byte.is_ascii_alphanumeric())
+}
+
+/// The Region names in the dataset's `regions.json`, sorted, each checked to be safe to write into
+/// a cache file's `# regions` line.
+pub(crate) fn read_regions(regions_json: &[u8]) -> Result<Vec<String>, RefreshError> {
+    let rows: Vec<RegionRow> =
+        serde_json::from_slice(regions_json).map_err(|e| data_error("regions.json", e))?;
+    let regions: BTreeSet<String> = rows.into_iter().map(|row| row.region).collect();
+    if regions.is_empty() || regions.len() > 64 {
+        return Err(RefreshError::Data(format!("{} Regions", regions.len())));
+    }
+    // A Region name is written into the cache's `# regions` line, split on spaces when read.
+    if let Some(bad) = regions.iter().find(|name| {
+        name.is_empty()
+            || name.len() > 32
+            || !name
+                .bytes()
+                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    }) {
+        return Err(RefreshError::Data(format!("Region name {bad:?}")));
+    }
+
+    Ok(regions.into_iter().collect())
 }
 
 /// Turn the dataset's `regions.json` and `cfn_resources.json` into snapshot text.
@@ -264,23 +357,7 @@ pub fn convert_cfn(
         }
         Some(_) => {}
     }
-    let rows: Vec<RegionRow> =
-        serde_json::from_slice(regions_json).map_err(|e| data_error("regions.json", e))?;
-    let regions: BTreeSet<String> = rows.into_iter().map(|row| row.region).collect();
-    if regions.is_empty() || regions.len() > 64 {
-        return Err(RefreshError::Data(format!("{} Regions", regions.len())));
-    }
-    // A Region name is written into the cache's `# regions` line, split on spaces when read.
-    if let Some(bad) = regions.iter().find(|name| {
-        name.is_empty()
-            || name.len() > 32
-            || !name
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    }) {
-        return Err(RefreshError::Data(format!("Region name {bad:?}")));
-    }
-    let regions: Vec<String> = regions.into_iter().collect();
+    let regions = read_regions(regions_json)?;
     let services: Vec<CfnService> =
         serde_json::from_slice(cfn_json).map_err(|e| data_error("cfn_resources.json", e))?;
     let mut masks: BTreeMap<String, u64> = BTreeMap::new();
@@ -336,7 +413,7 @@ pub fn convert_cfn(
     Ok(text)
 }
 
-fn sha256_hex(bytes: &[u8]) -> String {
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
@@ -346,6 +423,12 @@ fn sha256_hex(bytes: &[u8]) -> String {
 /// Whether `text` is a whole cache file: it ends with `# end <sha-256 of everything before>`, and
 /// its `# types N` is the number of type lines. Anything cut short, edited or extended fails.
 fn cache_text_is_whole(text: &str) -> Result<(), String> {
+    sealed_text_is_whole(text, "# types ")
+}
+
+/// [`cache_text_is_whole`] for a file whose count line starts with `count_label` (`# types `, or
+/// `# services ` for the service table).
+pub(crate) fn sealed_text_is_whole(text: &str, count_label: &str) -> Result<(), String> {
     let at = text.rfind("# end ").ok_or("no end marker")?;
     if at != 0 && !text[..at].ends_with('\n') {
         return Err("the end marker is not on a line of its own".to_string());
@@ -362,15 +445,15 @@ fn cache_text_is_whole(text: &str) -> Result<(), String> {
     }
     let declared = body
         .lines()
-        .find_map(|line| line.strip_prefix("# types "))
+        .find_map(|line| line.strip_prefix(count_label))
         .and_then(|count| count.parse::<usize>().ok())
-        .ok_or("no type count")?;
+        .ok_or("no count")?;
     let found = body
         .lines()
         .filter(|line| !line.is_empty() && !line.starts_with('#'))
         .count();
     if declared != found {
-        return Err(format!("{declared} types declared, {found} present"));
+        return Err(format!("{declared} rows declared, {found} present"));
     }
     Ok(())
 }
@@ -432,7 +515,7 @@ pub(crate) fn parse_stamp(text: &str) -> Option<(i64, u32)> {
 }
 
 /// A stamp no more than a day after `now`: a day of slack for clocks, no more.
-fn not_in_the_future(stamp: (i64, u32), now: SystemTime) -> bool {
+pub(crate) fn not_in_the_future(stamp: (i64, u32), now: SystemTime) -> bool {
     let now = now
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64);
@@ -471,38 +554,8 @@ pub fn refresh_with(
     now: SystemTime,
     min_types: usize,
 ) -> Result<Refreshed, RefreshError> {
-    let fetch = |key: String, max: usize| {
-        fetcher
-            .get(&ObjectRequest::new(key.clone()), max)
-            .map_err(|error| RefreshError::Fetch { key, error })
-    };
-    let index: Index = serde_json::from_slice(&fetch(INDEX_KEY.to_string(), MAX_INDEX_BYTES)?)
-        .map_err(|e| data_error("index.json", e))?;
-    let version = index.latest_version;
-    if !valid_version(&version) {
-        return Err(RefreshError::Data(format!("version {version:?}")));
-    }
-    let manifest_key = format!("public/{version}/manifest.json");
-    let Some(entry) = index
-        .versions
-        .get(&version)
-        .filter(|entry| entry.manifest == manifest_key)
-    else {
-        return Err(RefreshError::Data(format!(
-            "the index does not point {version} at {manifest_key}"
-        )));
-    };
-    let manifest: Manifest = serde_json::from_slice(&fetch(manifest_key, MAX_MANIFEST_BYTES)?)
-        .map_err(|e| data_error("manifest.json", e))?;
-    if entry
-        .last_updated
-        .as_deref()
-        .is_some_and(|stamp| stamp != manifest.last_updated)
-    {
-        return Err(RefreshError::Data(
-            "the index and the manifest give different dates".to_string(),
-        ));
-    }
+    let Header { version, manifest } = fetch_header(fetcher)?;
+    let fetch = |key: String, max: usize| fetch_object(fetcher, key, max);
     let regions = fetch(
         format!("public/{version}/json/regions.json"),
         MAX_REGIONS_BYTES,
@@ -545,7 +598,6 @@ pub fn refresh_with(
             parse_stamp(old.last_updated()).is_some_and(|theirs| Some(theirs) >= ours)
         })
     };
-    static WRITING: Mutex<()> = Mutex::new(());
     let _one_at_a_time = WRITING.lock().unwrap_or_else(|e| e.into_inner());
     if held() {
         return Ok(refreshed(false));
@@ -555,6 +607,9 @@ pub fn refresh_with(
     Ok(refreshed(written))
 }
 
+/// One writer of a cache file at a time in this process.
+pub(crate) static WRITING: Mutex<()> = Mutex::new(());
+
 /// A new file that must not exist yet (`O_EXCL`), so a link planted at its name is not followed.
 fn open_new(path: &Path) -> std::io::Result<std::fs::File> {
     std::fs::OpenOptions::new()
@@ -563,14 +618,14 @@ fn open_new(path: &Path) -> std::io::Result<std::fs::File> {
         .open(path)
 }
 
-fn create_temp(dir: &Path) -> Result<(PathBuf, std::fs::File), String> {
+fn create_temp(dir: &Path, stem: &str) -> Result<(PathBuf, std::fs::File), String> {
     static COUNTER: AtomicU64 = AtomicU64::new(0);
     for _ in 0..16 {
         let nanos = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.subsec_nanos());
         let name = format!(
-            ".{CACHE_FILE}.tmp-{}-{}-{nanos:x}",
+            ".{stem}.tmp-{}-{}-{nanos:x}",
             std::process::id(),
             COUNTER.fetch_add(1, Ordering::Relaxed)
         );
@@ -586,14 +641,18 @@ fn create_temp(dir: &Path) -> Result<(PathBuf, std::fs::File), String> {
 
 /// Write `bytes` to a new temp file, flush it to disk, ask `still_wanted` once more, and rename
 /// it over `path`. `Ok(false)` when it was no longer wanted; the temp file is removed.
-fn write_atomically(
+pub(crate) fn write_atomically(
     path: &Path,
     bytes: &[u8],
     still_wanted: &dyn Fn() -> bool,
 ) -> Result<bool, String> {
     let dir = path.parent().ok_or("no directory")?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let (temp, mut file) = create_temp(dir)?;
+    let stem = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(CACHE_FILE);
+    let (temp, mut file) = create_temp(dir, stem)?;
     let written = file.write_all(bytes).and_then(|()| file.sync_all());
     drop(file);
     if let Err(error) = written {
@@ -700,7 +759,12 @@ fn cache_in_use(dir: &Path, now: SystemTime) -> Option<Snapshot> {
 /// cache folder, not the AWS configuration folder (`~/.aws`), which this code never writes.
 pub fn cache_dir() -> Option<PathBuf> {
     let var = |name: &str| std::env::var_os(name);
-    cache_dir_from(var(CACHE_DIR_ENV), var("XDG_CACHE_HOME"), var("HOME"))
+    // Windows has no `HOME`: its user folder is `USERPROFILE`. Not exercised by a test here
+    // (`cfg!(windows)` is false), but it only picks a folder; it cannot fail.
+    let home = var("HOME")
+        .filter(|home| !home.is_empty())
+        .or_else(|| cfg!(windows).then(|| var("USERPROFILE")).flatten());
+    cache_dir_from(var(CACHE_DIR_ENV), var("XDG_CACHE_HOME"), home)
 }
 
 /// [`cache_dir`] from the three settings, an empty one counting as unset.
@@ -780,25 +844,56 @@ pub fn current_cache_status(
     (CacheStatus::InUse, Some(cache))
 }
 
-/// The snapshot the gate uses: see [`choose`]. Read once per process. Logs a warning, once,
-/// when the data in use is over the age limit (`region_availability::STALE_AFTER_DAYS`).
-/// With no cache file this is the bundled snapshot and makes no network call.
-pub fn current() -> &'static Snapshot {
-    static CURRENT: OnceLock<&'static Snapshot> = OnceLock::new();
-    CURRENT.get_or_init(|| {
-        static CACHED: OnceLock<Option<Snapshot>> = OnceLock::new();
-        let cached = CACHED
-            .get_or_init(|| cache_dir().and_then(|dir| cache_in_use(&dir, SystemTime::now())))
-            .as_ref();
-        let chosen = choose(Snapshot::bundled(), cached);
-        if let Some(note) = chosen.staleness_note(SystemTime::now()) {
-            tracing::warn!(
-                "the AWS Regional availability data in use is dated {}: {note}",
-                chosen.data_date()
-            );
-        }
-        chosen
-    })
+/// The CloudFormation data in use. `None` until the first [`current`] call reads the cache.
+static IN_USE: RwLock<Option<Arc<Snapshot>>> = RwLock::new(None);
+
+/// The snapshot the CloudFormation check uses: see [`choose`]. The first call reads the cache
+/// file (a local read, no network); after that the data is replaced only by [`install`], which
+/// the background refresh calls, so a request holds one whole snapshot from start to end. Logs a
+/// warning, once, when the data in use is over the age limit
+/// (`region_availability::STALE_AFTER_DAYS`). With no cache file this is the bundled snapshot.
+pub fn current() -> Arc<Snapshot> {
+    if let Some(held) = IN_USE.read().unwrap_or_else(|e| e.into_inner()).as_ref() {
+        return Arc::clone(held);
+    }
+    let mut slot = IN_USE.write().unwrap_or_else(|e| e.into_inner());
+    if let Some(held) = slot.as_ref() {
+        return Arc::clone(held);
+    }
+    let cached = cache_dir().and_then(|dir| cache_in_use(&dir, SystemTime::now()));
+    let bundled = Snapshot::bundled_arc();
+    let chosen = match cached {
+        Some(cached) if std::ptr::eq(choose(bundled, Some(&cached)), &cached) => Arc::new(cached),
+        _ => Arc::clone(bundled),
+    };
+    if let Some(note) = chosen.staleness_note(SystemTime::now()) {
+        tracing::warn!(
+            "the AWS Regional availability data in use is dated {}: {note}",
+            chosen.data_date()
+        );
+    }
+    *slot = Some(Arc::clone(&chosen));
+    chosen
+}
+
+/// Put `snapshot` in use when it is complete and newer than what is in use now: it lists at least
+/// [`type_floor`] types and its date is a real instant after the date of the data in use.
+/// Returns whether it was installed.
+pub fn install(snapshot: Snapshot) -> bool {
+    if !wins(&snapshot, &current()) {
+        return false;
+    }
+    *IN_USE.write().unwrap_or_else(|e| e.into_inner()) = Some(Arc::new(snapshot));
+    true
+}
+
+/// Whether `new` should replace `held`: complete (see [`type_floor`]) and dated after it.
+pub fn wins(new: &Snapshot, held: &Snapshot) -> bool {
+    let newer = matches!(
+        (parse_stamp(new.last_updated()), parse_stamp(held.last_updated())),
+        (Some(new), Some(old)) if new > old
+    );
+    newer && new.type_count() >= type_floor(Snapshot::bundled())
 }
 
 #[cfg(test)]
@@ -1620,8 +1715,9 @@ pub(crate) mod tests {
     }
 
     /// `current()` reads the cache from the directory the environment names, and picks it when it
-    /// is newer than the bundled snapshot. It is chosen once per process, so this is the only
-    /// test in this crate that calls `current()`.
+    /// is newer than the bundled snapshot. It reads the cache at its first call, so this is the
+    /// only test in this crate that calls `current()` (the refresh tests hold their data in a
+    /// `Local`, not in the process-wide slot).
     #[test]
     fn the_snapshot_in_use_comes_from_the_cache_directory_the_environment_names() {
         let dir = temp_dir("current");
@@ -1638,8 +1734,8 @@ pub(crate) mod tests {
         std::env::set_var(CACHE_DIR_ENV, &dir);
         let chosen = current();
         assert_eq!(chosen.last_updated(), stamp);
-        assert!(!std::ptr::eq(chosen, Snapshot::bundled()));
-        assert!(std::ptr::eq(chosen, current()), "chosen once");
+        assert!(!std::ptr::eq(&*chosen, Snapshot::bundled()));
+        assert!(Arc::ptr_eq(&chosen, &current()), "chosen once");
         std::env::remove_var(CACHE_DIR_ENV);
         std::fs::remove_dir_all(&dir).unwrap();
     }
@@ -2061,8 +2157,8 @@ pub(crate) mod tests {
     #[test]
     fn temp_names_are_unique_and_a_write_leaves_no_temp_file() {
         let dir = temp_dir("temps");
-        let (first, _a) = create_temp(&dir).unwrap();
-        let (second, _b) = create_temp(&dir).unwrap();
+        let (first, _a) = create_temp(&dir, CACHE_FILE).unwrap();
+        let (second, _b) = create_temp(&dir, CACHE_FILE).unwrap();
         assert_ne!(first, second);
         std::fs::remove_file(&first).unwrap();
         std::fs::remove_file(&second).unwrap();

@@ -31,7 +31,7 @@
 //! refresh file in the follow-up changes.
 
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 use std::time::SystemTime;
 
 pub use region_gate::basics::{
@@ -93,9 +93,17 @@ impl Snapshot {
 
     /// The snapshot bundled in this crate, parsed once.
     pub fn bundled() -> &'static Snapshot {
-        static BUNDLED: OnceLock<Snapshot> = OnceLock::new();
+        Snapshot::bundled_arc()
+    }
+
+    /// [`Snapshot::bundled`], as the shared pointer the data in use is held in.
+    pub fn bundled_arc() -> &'static Arc<Snapshot> {
+        static BUNDLED: OnceLock<Arc<Snapshot>> = OnceLock::new();
         BUNDLED.get_or_init(|| {
-            Snapshot::parse(BUNDLED_CFN).expect("the bundled availability snapshot is well formed")
+            Arc::new(
+                Snapshot::parse(BUNDLED_CFN)
+                    .expect("the bundled availability snapshot is well formed"),
+            )
         })
     }
 
