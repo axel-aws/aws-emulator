@@ -3,7 +3,7 @@
 //! Whether AWS offers an API service in a Region, from AWS's published Regional availability
 //! data.
 //!
-//! The sibling of [`crate::region_availability`], which answers the same question for
+//! The sibling of `service_common::region_availability`, which answers the same question for
 //! CloudFormation resource types. A request to a service that a Region does not offer fails on
 //! AWS (the endpoint does not exist); the emulator would otherwise answer it. This module
 //! answers one question, "does Region R offer the API service with Smithy shape id S", from a
@@ -26,11 +26,11 @@
 //!
 //! shortcut: service level only. A listed service that is offered in a Region but lacks one of
 //! its operations there is not caught; add an operation level to the snapshot when that is
-//! wanted. Nothing in this crate calls [`decide`] yet: the router that sees every request and
-//! knows its service and Region lives in `vendor/`, and the call belongs right after it names
-//! the service, before the operation runs.
+//! wanted. The request router calls [`decide`] through [`crate::gate`], right after it has named
+//! the service and before the operation runs. The table is bundled; the refresh command does
+//! not update it (the dataset's `apis.json` needs a converter of its own).
 
-use crate::region_availability::{staleness_note, Mode, Verdict, MODE_ENV};
+use crate::basics::{staleness_note, Mode, Verdict, MODE_ENV};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use std::time::SystemTime;

@@ -204,6 +204,26 @@ impl MultiServiceRouter {
             return http_response_from_runtime_api(rt_resp);
         }
 
+        // REGION AVAILABILITY: a service the signed Region does not offer is refused here,
+        // before its operation is named. On AWS the call never gets an answer, because the
+        // host name does not resolve. `region_gate` decides, by `EMULATOR_REGION_AVAILABILITY`
+        // (`off`, `warn` or `enforce`), and lets through anything its data does not list.
+        if let Some(message) = region_gate::gate::refusal(
+            svc.definition().identity().shape_id(),
+            &crate::signed_url::signed_region(&parts),
+        ) {
+            let code = region_gate::gate::REFUSAL_CODE;
+            let err =
+                aws_smithy_schema_server::ProtocolError::Unauthenticated { code, message: "" };
+            let chosen = Some(crate::Refused {
+                code: code.to_string(),
+                message,
+            });
+            return http_response_from_runtime_api(
+                svc.definition().refusal_response(err, chosen, &rt_req),
+            );
+        }
+
         // `aws-chunked` is a transfer encoding, not a payload, so it is stripped
         // once here — before any protocol or the operation lookup reads the body
         // — exactly as an HTTP server strips `Transfer-Encoding: chunked`, and

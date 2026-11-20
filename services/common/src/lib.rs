@@ -281,9 +281,12 @@ pub mod availability_source;
 /// Reading the Regional availability data from its S3 access point with the user's own AWS
 /// credentials: a SigV4 signer, the SDK's default credential chain, and an https transport.
 pub mod availability_fetch;
+/// The `refresh-region-data` command: refresh the cached Regional availability data on request,
+/// and say which data is in use.
+pub mod availability_cli;
 /// Whether AWS offers an API service in a Region, from the same snapshot data, keyed by the
 /// service's Smithy shape id, and what to do with a request to one it does not.
-pub mod service_availability;
+pub use region_gate::service_availability;
 /// The event source types the one `rds` front door publishes a category map for, and the
 /// categories of each — one catalog for the three service views it serves, so
 /// `DescribeEventCategories` answers every view with the rows, and the order, that front

@@ -17,4 +17,5 @@ aws-smithy-types = "1"
 bytes = "1"
 emulator-server = { path = "../server", package = "aws-emulator-server", version = "*" }
 emulator-telemetry = { path = "../emulator-telemetry", package = "aws-emulator-emulator-telemetry", version = "*" }
+region-gate = { path = "../../services/region-gate" }
 uuid = { version = "1", features = ["v4"] }

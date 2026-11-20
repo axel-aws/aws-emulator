@@ -1,0 +1,34 @@
+[package]
+name = "region-gate"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# A refusal that is only a warning is logged, and so is a mode setting that is not one.
+tracing = { workspace = true }
+
+[lints]
+workspace = true
+
+# The request router and six real services, so a test can send a request to the emulator and read
+# what comes back. They depend on `service-common`, which depends on this crate: a dev-dependency
+# cycle, which Cargo allows because only the tests need it.
+[dev-dependencies]
+smithy-server-runtime = { workspace = true }
+engine = { workspace = true }
+http = { workspace = true }
+bytes = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+# One service per protocol the router answers a refusal in: awsJson1.1, restJson1, awsQuery
+# and rpcv2Cbor. The first four are the cases of the feature request.
+service-com-amazonaws-memorydb-amazonmemorydb = { workspace = true }
+service-com-amazonaws-grafana-awsgrafanacontrolplane = { workspace = true }
+service-com-amazonaws-pipes-pipes = { workspace = true }
+service-com-amazonaws-appsync-awsdeepdishcontrolplaneservice = { workspace = true }
+service-com-amazonaws-ses-simpleemailservice = { workspace = true }
+service-com-amazonaws-interconnect-interconnect = { workspace = true }
+# A service the bundled table gets wrong (listed in us-east-1 only), for the default-mode test.
+service-com-amazonaws-iotdataplane-iotmoonrakerservice = { workspace = true }

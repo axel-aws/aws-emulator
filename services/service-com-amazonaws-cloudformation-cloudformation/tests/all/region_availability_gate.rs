@@ -332,7 +332,7 @@ fn the_suites_ignore_a_cache_in_the_home_folder() {
     )
     .expect("a valid poisoned cache");
     let home = std::env::temp_dir().join(format!("gate-home-probe-{}", std::process::id()));
-    let cache_dir = home.join(".aws/emulator/region-availability");
+    let cache_dir = home.join(".cache/aws-emulator/region-availability");
     std::fs::create_dir_all(&cache_dir).unwrap();
     std::fs::write(cache_dir.join(CACHE_FILE), poison).unwrap();
 
@@ -356,6 +356,7 @@ fn the_suites_ignore_a_cache_in_the_home_folder() {
         .env("HOME", &home)
         .env(HOME_PROBE_ENV, "1")
         .env_remove("EMULATOR_REGION_AVAILABILITY_CACHE")
+        .env_remove("XDG_CACHE_HOME")
         .env_remove("EMULATOR_REGION_AVAILABILITY")
         .output()
         .expect("the child test run starts");

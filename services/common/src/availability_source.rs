@@ -694,13 +694,90 @@ fn cache_in_use(dir: &Path, now: SystemTime) -> Option<Snapshot> {
     })
 }
 
-fn cache_dir_from_env() -> Option<PathBuf> {
-    match std::env::var_os(CACHE_DIR_ENV) {
-        Some(dir) if !dir.is_empty() => Some(PathBuf::from(dir)),
-        _ => std::env::var_os("HOME")
-            .filter(|home| !home.is_empty())
-            .map(|home| PathBuf::from(home).join(".aws/emulator/region-availability")),
+/// The folder the cache file lives in: `EMULATOR_REGION_AVAILABILITY_CACHE` when it is set and not
+/// empty, else `$XDG_CACHE_HOME/aws-emulator/region-availability`, else
+/// `$HOME/.cache/aws-emulator/region-availability`. `None` when none of them is there. It is a
+/// cache folder, not the AWS configuration folder (`~/.aws`), which this code never writes.
+pub fn cache_dir() -> Option<PathBuf> {
+    let var = |name: &str| std::env::var_os(name);
+    cache_dir_from(var(CACHE_DIR_ENV), var("XDG_CACHE_HOME"), var("HOME"))
+}
+
+/// [`cache_dir`] from the three settings, an empty one counting as unset.
+fn cache_dir_from(
+    named: Option<std::ffi::OsString>,
+    xdg_cache_home: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    let set = |value: Option<std::ffi::OsString>| value.filter(|value| !value.is_empty());
+    set(named).map(PathBuf::from).or_else(|| {
+        set(xdg_cache_home)
+            .map(PathBuf::from)
+            .or_else(|| set(home).map(|home| PathBuf::from(home).join(".cache")))
+            .map(|cache| cache.join("aws-emulator").join("region-availability"))
+    })
+}
+
+/// What became of the cache file in a folder, for the status line.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CacheStatus {
+    /// No folder is named and `HOME` is not set.
+    NoFolder,
+    /// The folder holds no cache file.
+    Missing,
+    /// There is a file and it cannot be used: cut, edited, from another source, not text, over the
+    /// size cap, or not a regular file.
+    Unusable,
+    /// A whole cache that is not used, and why.
+    Ignored(String),
+    /// The cache is the data in use.
+    InUse,
+}
+
+/// The state of the cache in `folder`, and the cache itself when it is the data in use. What it
+/// returns is what [`current`] picks: a cache is in use only when [`choose`] would pick it and it
+/// is not dated in the future.
+pub fn current_cache_status(
+    folder: Option<&Path>,
+    now: SystemTime,
+) -> (CacheStatus, Option<Snapshot>) {
+    let Some(folder) = folder else {
+        return (CacheStatus::NoFolder, None);
+    };
+    let path = folder.join(CACHE_FILE);
+    match std::fs::metadata(&path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return (CacheStatus::Missing, None)
+        }
+        Err(_) => return (CacheStatus::Unusable, None),
     }
+    let Some(cache) = load_cache_file(&path) else {
+        return (CacheStatus::Unusable, None);
+    };
+    let bundled = Snapshot::bundled();
+    let ignored = |why: String| (CacheStatus::Ignored(why), None);
+    match parse_stamp(cache.last_updated()) {
+        None => return ignored("its date cannot be read".to_string()),
+        Some(stamp) if !not_in_the_future(stamp, now) => {
+            return ignored(format!(
+                "it is dated {}, in the future",
+                cache.last_updated()
+            ))
+        }
+        Some(_) => {}
+    }
+    if cache.type_count() < type_floor(bundled) {
+        return ignored(format!(
+            "it lists {} resource types, under the floor of {}",
+            cache.type_count(),
+            type_floor(bundled)
+        ));
+    }
+    if !std::ptr::eq(choose(bundled, Some(&cache)), &cache) {
+        return ignored("it is not newer than the bundled data".to_string());
+    }
+    (CacheStatus::InUse, Some(cache))
 }
 
 /// The snapshot the gate uses: see [`choose`]. Read once per process. Logs a warning, once,
@@ -711,9 +788,7 @@ pub fn current() -> &'static Snapshot {
     CURRENT.get_or_init(|| {
         static CACHED: OnceLock<Option<Snapshot>> = OnceLock::new();
         let cached = CACHED
-            .get_or_init(|| {
-                cache_dir_from_env().and_then(|dir| cache_in_use(&dir, SystemTime::now()))
-            })
+            .get_or_init(|| cache_dir().and_then(|dir| cache_in_use(&dir, SystemTime::now())))
             .as_ref();
         let chosen = choose(Snapshot::bundled(), cached);
         if let Some(note) = chosen.staleness_note(SystemTime::now()) {
@@ -765,7 +840,11 @@ pub(crate) mod tests {
 
     /// A dataset stamp `seconds` after the bundled snapshot's date, in the dataset's format.
     pub(crate) fn after_bundled(seconds: i64) -> String {
-        let at = bundled_secs() + seconds;
+        stamp_at(bundled_secs() + seconds)
+    }
+
+    /// The dataset-format stamp of the instant `at` seconds after 1970 (UTC).
+    fn stamp_at(at: i64) -> String {
         let (days, rest) = (at.div_euclid(86_400), at.rem_euclid(86_400));
         // Days since 1970 to a civil date (Howard Hinnant's algorithm).
         let z = days + 719_468;
@@ -810,6 +889,84 @@ pub(crate) mod tests {
         )
     }
 
+    /// The cache folder: the named one, else the XDG cache folder, else `~/.cache`; never
+    /// anything under `~/.aws`.
+    #[test]
+    fn the_cache_folder_is_a_cache_folder_and_never_under_dot_aws() {
+        let os = |text: &str| Some(std::ffi::OsString::from(text));
+        let cases = [
+            (
+                os("/x/named"),
+                os("/x/xdg"),
+                os("/home/u"),
+                Some("/x/named"),
+            ),
+            (
+                os(""),
+                os("/x/xdg"),
+                os("/home/u"),
+                Some("/x/xdg/aws-emulator/region-availability"),
+            ),
+            (
+                None,
+                os(""),
+                os("/home/u"),
+                Some("/home/u/.cache/aws-emulator/region-availability"),
+            ),
+            (
+                None,
+                None,
+                os("/home/u"),
+                Some("/home/u/.cache/aws-emulator/region-availability"),
+            ),
+            (None, None, os(""), None),
+            (None, None, None, None),
+        ];
+        for (named, xdg, home, expected) in cases {
+            let got = cache_dir_from(named.clone(), xdg.clone(), home.clone());
+            assert_eq!(
+                got.as_deref(),
+                expected.map(Path::new),
+                "{named:?} {xdg:?} {home:?}"
+            );
+            assert!(!got.is_some_and(|path| path.to_string_lossy().contains("/.aws")));
+        }
+    }
+
+    /// The date helper is right on every day of six years, January and February and leap days
+    /// included: each stamp reads back, through the loader's own parser, as the instant it names.
+    #[test]
+    fn the_date_helper_is_right_on_every_day_including_january_and_february() {
+        assert_eq!(stamp_at(0), "1970-01-01T00:00:00+00:00");
+        let day = |date: &str| days_from_date(date).unwrap() * DAY;
+        for (date, plus_one_day) in [
+            ("2026-01-31", "2026-02-01"),
+            ("2027-01-01", "2027-01-02"),
+            ("2027-02-28", "2027-03-01"),
+            ("2028-02-28", "2028-02-29"),
+            ("2028-02-29", "2028-03-01"),
+            ("2026-12-31", "2027-01-01"),
+            ("2000-02-29", "2000-03-01"),
+            ("2100-02-28", "2100-03-01"),
+        ] {
+            assert_eq!(
+                stamp_at(day(date)),
+                format!("{date}T00:00:00+00:00"),
+                "{date}"
+            );
+            assert_eq!(
+                stamp_at(day(date) + DAY + 3_725),
+                format!("{plus_one_day}T01:02:05+00:00"),
+                "the day after {date}"
+            );
+        }
+        for n in 0..6 * 366 {
+            let at = 1_767_225_600 + n * DAY + 12_345; // from 2026-01-01
+            let stamp = stamp_at(at);
+            assert_eq!(parse_stamp(&stamp).unwrap().0, at, "{stamp}");
+        }
+    }
+
     #[test]
     fn the_test_dates_follow_the_bundled_date() {
         assert_eq!(
@@ -829,7 +986,7 @@ pub(crate) mod tests {
         assert!(parse_stamp(&day_after()) < parse_stamp(&two_days_after()));
     }
 
-    fn temp_dir(name: &str) -> PathBuf {
+    pub(crate) fn temp_dir(name: &str) -> PathBuf {
         static COUNTER: AtomicUsize = AtomicUsize::new(0);
         let dir = std::env::temp_dir().join(format!(
             "availability-{name}-{}-{}",
@@ -876,7 +1033,7 @@ pub(crate) mod tests {
         dataset_with(last_updated, 3, regions_file(), cfn_file())
     }
 
-    fn dataset_with(
+    pub(crate) fn dataset_with(
         last_updated: &str,
         region_count: u64,
         regions: Vec<u8>,
@@ -897,7 +1054,7 @@ pub(crate) mod tests {
 
     /// The bundled snapshot turned back into the dataset's own JSON: `regions.json`,
     /// `cfn_resources.json`, and the dataset's date.
-    fn bundled_as_json() -> (Vec<u8>, Vec<u8>, String) {
+    pub(crate) fn bundled_as_json() -> (Vec<u8>, Vec<u8>, String) {
         let regions: Vec<&str> = BUNDLED_TEXT
             .lines()
             .find_map(|l| l.strip_prefix("# regions "))

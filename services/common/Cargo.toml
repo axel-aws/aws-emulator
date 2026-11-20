@@ -99,6 +99,9 @@ http = { workspace = true }
 # binds a route for the request, and the empty `SdkBody` the request it hands that
 # service's protocol carries.
 smithy-server-runtime = { workspace = true }
+# `region_availability` and `service_availability`: the mode, the verdict and the service table
+# the request router's Region check also reads, kept in a crate below the router.
+region-gate = { path = "../region-gate" }
 aws-smithy-schema = { workspace = true }
 aws-smithy-schema-server = { workspace = true }
 aws-smithy-runtime-api = { workspace = true }
